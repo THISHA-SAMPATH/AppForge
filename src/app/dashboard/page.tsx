@@ -4,9 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Papa from "papaparse";
-import { validateConfig } from "@/engine/validator";
-import type { AppConfig, ValidationResult, FieldConfig, FieldType } from "@/types/config";
+import type { AppConfig, FieldConfig, FieldType } from "@/types/config";
 
 interface App {
   id: string;
@@ -21,14 +19,6 @@ interface App {
   updatedAt: string;
   _count: { records: number };
 }
-
-const TYPE_COLORS: Record<string, string> = {
-  string: "badge-cyan",
-  number: "badge-amber",
-  boolean: "badge-green",
-  enum: "badge-purple",
-  date: "badge-red",
-};
 
 const STARTERS = [
   {
@@ -99,94 +89,54 @@ function parseDescriptionToConfig(desc: string): AppConfig {
   return { entity, fields, ui: { layout: "table" } };
 }
 
-// ─── NAV ICONS ─────────────────────────────────────────────────────────────────
-function IconApps() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
-      <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
-    </svg>
-  );
-}
-function IconCode() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-    </svg>
-  );
-}
-function IconUpload() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-    </svg>
-  );
-}
-function IconPlus() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  );
-}
-function IconLogout() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
-
 export default function DashboardPage() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"apps" | "playground" | "csv">("apps");
   const [apps, setApps] = useState<App[]>([]);
   const [loading, setLoading] = useState(true);
   const [assistantPrompt, setAssistantPrompt] = useState("");
   const [forging, setForging] = useState(false);
   const [error, setError] = useState("");
 
-  // Playground state
-  const [playgroundInput, setPlaygroundInput] = useState<string>(
-    JSON.stringify({ entity: "Product Item", fields: [{ name: "name", type: "string", required: true }, { name: "price", type: "float", required: false }, { name: "name", type: "string" }] }, null, 2)
-  );
-  const [playgroundResult, setPlaygroundResult] = useState<ValidationResult | null>(null);
-
-  // CSV state
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
-  const [csvRows, setCsvRows] = useState<any[][]>([]);
-  const [csvAppName, setCsvAppName] = useState("");
-  const [csvEntityName, setCsvEntityName] = useState("");
-  const [csvFields, setCsvFields] = useState<FieldConfig[]>([]);
-  const [csvPreviewConfig, setCsvPreviewConfig] = useState<string>("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [dragActive, setDragActive] = useState(false);
-  const [importingCsv, setImportingCsv] = useState(false);
+  // Command palette state
+  const [showCmdPalette, setShowCmdPalette] = useState(false);
+  const [cmdSearch, setCmdSearch] = useState("");
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
-    queueMicrotask(() => {
-      void fetch("/api/apps")
-        .then((r) => r.json())
-        .then((d) => { if (!cancelled && d.success) setApps(d.data); })
-        .finally(() => { if (!cancelled) setLoading(false); });
-    });
-    return () => { cancelled = true; };
-  }, []);
+    fetch("/api/apps")
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled && d.success) setApps(d.data); })
+      .finally(() => { if (!cancelled) setLoading(false); });
 
-  useEffect(() => {
-    if (activeTab !== "playground") return;
-    try {
-      const parsed = JSON.parse(playgroundInput);
-      setPlaygroundResult(validateConfig(parsed));
-    } catch {
-      setPlaygroundResult({ valid: false, config: { entity: "Item", fields: [], ui: { layout: "table" } }, warnings: [], errors: [{ message: "Parsing Error: Input is not valid JSON." }] });
-    }
-  }, [playgroundInput, activeTab]);
+    // Click outside handler for profile menu
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setShowProfileDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+
+    // Global keydown listener for Ctrl+K
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setShowCmdPalette((prev) => !prev);
+      }
+      if (e.key === "Escape") {
+        setShowCmdPalette(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const handleForgeAssistant = (promptText = assistantPrompt) => {
     if (!promptText.trim()) return;
@@ -196,560 +146,268 @@ export default function DashboardPage() {
       const config = parseDescriptionToConfig(promptText);
       const encoded = encodeURIComponent(JSON.stringify(config));
       const appName = config.entity + " App";
-      router.push(`/apps/new?prefill=${encoded}&name=${encodeURIComponent(appName)}&desc=${encodeURIComponent(promptText)}`);
+      router.push(`/apps/new?prefill=${encoded}&name=${encodeURIComponent(appName)}&desc=${encodeURIComponent(promptText)}&animate=true`);
     } catch (e: any) {
       setError(e.message || "Could not parse query.");
       setForging(false);
     }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!confirm("Delete this app and all its data?")) return;
-    await fetch(`/api/apps/${id}`, { method: "DELETE" });
-    setApps((prev) => prev.filter((app) => app.id !== id));
-  };
+  const filteredCmdApps = apps.filter((app) =>
+    app.name.toLowerCase().includes(cmdSearch.toLowerCase()) ||
+    app.config.entity.toLowerCase().includes(cmdSearch.toLowerCase())
+  );
 
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
-    else if (e.type === "dragleave") setDragActive(false);
-  };
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation(); setDragActive(false);
-    if (e.dataTransfer.files?.[0]) processCsv(e.dataTransfer.files[0]);
-  };
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) processCsv(e.target.files[0]);
-  };
-  const processCsv = (file: File) => {
-    setCsvFile(file);
-    const appName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ").trim();
-    setCsvAppName(appName.charAt(0).toUpperCase() + appName.slice(1));
-    let entityName = appName.replace(/[^a-zA-Z0-9]/g, "").replace(/s$/, "");
-    if (!entityName) entityName = "Record";
-    setCsvEntityName(entityName.charAt(0).toUpperCase() + entityName.slice(1));
-    Papa.parse(file, {
-      header: false, dynamicTyping: true, skipEmptyLines: true,
-      complete: (results) => {
-        if (results.data.length > 0) {
-          const headers = (results.data[0] as string[]).map((h) => String(h || ""));
-          const rows = results.data.slice(1) as any[][];
-          setCsvHeaders(headers); setCsvRows(rows);
-          const fields: FieldConfig[] = headers.map((header, colIndex) => {
-            const cleanName = header.trim().replace(/[^a-zA-Z0-9_]/g, "_");
-            const values = rows.map((r) => r[colIndex]).filter((v) => v !== undefined && v !== null && v !== "");
-            let type: "string" | "number" | "boolean" | "enum" | "date" = "string";
-            let options: string[] = [];
-            if (values.length > 0) {
-              const isBool = values.every((v) => ["true","false","yes","no","1","0"].includes(String(v).toLowerCase().trim()));
-              const isNum = values.every((v) => !isNaN(Number(v)));
-              const isDate = values.every((v) => { const d = Date.parse(String(v)); return !isNaN(d) && (String(v).includes("-") || String(v).includes("/")); });
-              const uniqueVals = Array.from(new Set(values.map((v) => String(v).trim())));
-              const isEnum = uniqueVals.length > 0 && uniqueVals.length <= 5 && uniqueVals.length < values.length * 0.4;
-              if (isBool) type = "boolean";
-              else if (isNum) type = "number";
-              else if (isDate) type = "date";
-              else if (isEnum) { type = "enum"; options = uniqueVals; }
-            }
-            return { name: cleanName, type, required: false, options: type === "enum" ? options : undefined };
-          });
-          setCsvFields(fields);
-        }
-      },
-    });
-  };
-  useEffect(() => {
-    if (!csvEntityName) return;
-    setCsvPreviewConfig(JSON.stringify({ entity: csvEntityName, fields: csvFields, ui: { layout: "table" } }, null, 2));
-  }, [csvFields, csvEntityName]);
-  const updateCsvField = (index: number, key: keyof FieldConfig, value: any) => {
-    setCsvFields((prev) => {
-      const copy = [...prev];
-      const field = { ...copy[index], [key]: value } as FieldConfig;
-      if (key === "type") field.options = value === "enum" ? ["Yes", "No", "Maybe"] : undefined;
-      copy[index] = field;
-      return copy;
-    });
-  };
-  const handleCsvImport = async () => {
-    if (!csvAppName || !csvEntityName || !csvPreviewConfig) return;
-    setImportingCsv(true);
-    try {
-      const parsedConfig = JSON.parse(csvPreviewConfig);
-      const resApp = await fetch("/api/apps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: csvAppName, description: `Uploaded from CSV: ${csvFile?.name || ""}`, config: parsedConfig }) });
-      const dataApp = await resApp.json();
-      if (!dataApp.success) { alert(dataApp.error || "Failed to create app"); setImportingCsv(false); return; }
-      const appId = dataApp.data.app.id;
-      const entity = dataApp.data.app.config.entity;
-      const formattedRecords = csvRows.map((row) => {
-        const item: Record<string, any> = {};
-        csvFields.forEach((field, colIndex) => {
-          let val = row[colIndex];
-          if (val === undefined || val === null) val = "";
-          if (field.type === "number") { const num = Number(val); item[field.name] = isNaN(num) ? 0 : num; }
-          else if (field.type === "boolean") { const s = String(val).toLowerCase().trim(); item[field.name] = s === "true" || s === "yes" || s === "1"; }
-          else item[field.name] = String(val);
-        });
-        return item;
-      });
-      const resRecords = await fetch(`/api/apps/${appId}/${entity}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formattedRecords) });
-      const dataRecords = await resRecords.json();
-      if (!dataRecords.success) alert(dataRecords.error || "App created, but failed to insert records");
-      router.push(`/apps/${appId}`);
-    } catch (e) { console.error(e); alert("An unexpected error occurred"); }
-    finally { setImportingCsv(false); }
-  };
-  const resetCsv = () => { setCsvFile(null); setCsvHeaders([]); setCsvRows([]); setCsvFields([]); setCsvPreviewConfig(""); };
-
-  const totalRecords = apps.reduce((sum, app) => sum + app._count.records, 0);
-  const fieldTypes = [...new Set(apps.flatMap((app) => app.config.fields.map((f) => f.type)))].length;
   const initials = session?.user?.name?.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "AF";
 
   return (
-    <div className="sidebar-shell">
-      {/* ─── DARK SIDEBAR ─────────────────────────────────────────────────────────── */}
-      <aside className="sidebar">
-        {/* Logo */}
-        <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">AF</div>
-          <span className="sidebar-logo-text">AppForge</span>
+    <div className="forge-canvas flex flex-col justify-between p-6">
+      
+      {/* ─── FLOATING TOP NAV ────────────────────────────────────────────────────── */}
+      <header className="forge-topnav">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard" className="flex items-center gap-2 text-decoration-none">
+            <div className="w-8 h-8 rounded-xl bg-[#7c6ef5] flex items-center justify-center font-black text-white text-xs shadow-md shadow-[#7c6ef5]/20">
+              AF
+            </div>
+            <span className="font-extrabold tracking-tight text-sm text-slate-800">AppForge</span>
+          </Link>
         </div>
 
-        {/* Navigation */}
-        <div className="sidebar-section">
-          <p className="sidebar-section-label">Workspace</p>
-          <button
-            onClick={() => setActiveTab("apps")}
-            className={`sidebar-link ${activeTab === "apps" ? "active" : ""}`}
-          >
-            <span className="sidebar-link-icon"><IconApps /></span>
-            My Apps
-          </button>
-          <button
-            onClick={() => setActiveTab("playground")}
-            className={`sidebar-link ${activeTab === "playground" ? "active" : ""}`}
-          >
-            <span className="sidebar-link-icon"><IconCode /></span>
-            Config Playground
-          </button>
-          <button
-            onClick={() => setActiveTab("csv")}
-            className={`sidebar-link ${activeTab === "csv" ? "active" : ""}`}
-          >
-            <span className="sidebar-link-icon"><IconUpload /></span>
+        {/* Center links */}
+        <div className="hidden sm:flex items-center gap-6">
+          <Link href="/playground" className="text-xs font-bold text-slate-650 hover:text-indigo-600 transition text-decoration-none">
+            Playground
+          </Link>
+          <Link href="/import" className="text-xs font-bold text-slate-650 hover:text-indigo-600 transition text-decoration-none">
             Import CSV
+          </Link>
+          <button 
+            onClick={() => setShowCmdPalette(true)}
+            className="text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1 rounded-lg transition border-none cursor-pointer flex items-center gap-1.5"
+          >
+            <span>Search</span>
+            <kbd className="bg-white px-1 py-0.5 rounded text-[9px] border border-slate-200 font-mono">Ctrl+K</kbd>
           </button>
         </div>
 
-        <div className="sidebar-section" style={{ marginTop: 12 }}>
-          <p className="sidebar-section-label">Quick Start</p>
+        {/* User initials / Signout */}
+        <div className="relative" ref={profileMenuRef}>
+          <button
+            onClick={() => setShowProfileDropdown((prev) => !prev)}
+            className="w-8 h-8 rounded-full bg-amber-400 font-extrabold text-xs text-slate-900 border-none cursor-pointer flex items-center justify-center hover:scale-105 transition"
+          >
+            {initials}
+          </button>
+
+          {showProfileDropdown && (
+            <div className="dropdown-glass-menu" style={{ right: 0, left: "auto" }}>
+              <div className="p-3 border-b border-slate-100 bg-white/20">
+                <p className="text-xs font-black text-slate-800 m-0">{session?.user?.name || "Builder"}</p>
+                <p className="text-[10px] text-slate-500 m-0 mt-0.5">{session?.user?.email || ""}</p>
+              </div>
+              <div className="p-1.5 flex flex-col">
+                <Link href="/playground" className="text-xs font-bold text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-decoration-none transition">
+                  Config Playground
+                </Link>
+                <Link href="/import" className="text-xs font-bold text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-decoration-none transition">
+                  Import CSV File
+                </Link>
+                <button
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  className="text-xs font-bold text-red-650 hover:bg-red-50 p-2 rounded-lg text-left transition border-none bg-transparent cursor-pointer"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* ─── CENTRAL HERO & INPUT ────────────────────────────────────────────────── */}
+      <main className="flex-1 flex flex-col items-center justify-center max-w-[680px] w-full mx-auto mt-24 animate-fade-up">
+        
+        <h1 className="font-serif text-5xl md:text-6xl font-normal italic text-slate-800 text-center tracking-tight leading-tight mb-8">
+          What are we building today?
+        </h1>
+
+        {/* Glassmorphic input box */}
+        <div className="glass-prompt-container p-4 flex flex-col gap-3 w-full">
+          <textarea
+            rows={3}
+            className="w-full bg-transparent border-none outline-none resize-none text-[15px] leading-relaxed text-slate-850 placeholder-slate-400 font-sans"
+            placeholder="e.g., I need an inventory system for my bakery with item name, price (number), category (enum), and current stock levels..."
+            value={assistantPrompt}
+            onChange={(e) => setAssistantPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleForgeAssistant();
+              }
+            }}
+          />
+          <div className="flex items-center justify-between border-t border-slate-200/50 pt-3">
+            <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
+              <span>Press Enter to Forge</span>
+            </span>
+            <button
+              onClick={() => handleForgeAssistant()}
+              disabled={forging || !assistantPrompt.trim()}
+              className="frixion-btn px-5 py-2 text-xs font-bold"
+            >
+              {forging ? (
+                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                "Forge App →"
+              )}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-xs font-semibold text-red-500 mt-3">{error}</p>
+        )}
+
+        {/* Starter shortcuts */}
+        <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Starters:</span>
           {STARTERS.map((s) => (
             <button
               key={s.label}
               onClick={() => router.push(`/apps/new?starter=${encodeURIComponent(s.label)}`)}
-              className="sidebar-link"
-              title={s.desc}
+              className="glass-pill px-3 py-1.5 rounded-full text-xs font-semibold text-slate-700 hover:text-indigo-600 transition border-none cursor-pointer flex items-center gap-1.5"
             >
-              <span
-                style={{ width: 18, height: 18, borderRadius: 5, background: s.color, display: "grid", placeItems: "center", fontSize: 9, fontWeight: 900, color: "#000", flexShrink: 0 }}
-              >
-                {s.mark}
-              </span>
-              <span style={{ fontSize: 12 }}>{s.label}</span>
+              <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: s.color }} />
+              {s.label}
             </button>
           ))}
         </div>
+      </main>
 
-        {/* User / Signout */}
-        <div className="sidebar-bottom">
-          <div className="sidebar-user">
-            <div className="sidebar-avatar">{initials}</div>
-            <div style={{ minWidth: 0 }}>
-              <div className="sidebar-user-name">{session?.user?.name || "Builder"}</div>
-              <div className="sidebar-user-email">{session?.user?.email || ""}</div>
-            </div>
+      {/* ─── BOTTOM RECENT FORGES CAROUSEL ───────────────────────────────────────── */}
+      <footer className="max-w-[900px] w-full mx-auto mt-12 mb-6">
+        {loading ? (
+          <div className="flex gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex-1 h-36 rounded-2xl bg-white/40 border border-white/50 animate-pulse" />
+            ))}
           </div>
-          <button
-            onClick={() => signOut({ redirectTo: "/login" })}
-            className="sidebar-link"
-            style={{ marginTop: 4, color: "rgba(255,255,255,0.5)" }}
-          >
-            <span className="sidebar-link-icon"><IconLogout /></span>
-            Sign out
-          </button>
-        </div>
-      </aside>
-
-      {/* ─── MAIN CONTENT ─────────────────────────────────────────────────────────── */}
-      <div className="main-content">
-
-        {/* ─── APPS TAB ──────────────────────────────────────────────────────────── */}
-        {activeTab === "apps" && (
-          <div className="animate-fade-in">
-            {/* Page header */}
-            <div className="page-header">
-              <div>
-                <h1 className="font-serif text-2xl font-normal italic text-slate-800 leading-tight">
-                  Your App Inventory
-                </h1>
-                <p className="text-xs font-medium text-slate-400 mt-0.5">
-                  Metadata-driven database runtimes
-                </p>
-              </div>
-              <Link
-                href="/apps/new"
-                className="btn-primary glow-btn-primary gap-2 text-xs px-4 py-2"
-              >
-                <IconPlus />
-                New App
-              </Link>
+        ) : apps.length > 0 ? (
+          <div className="animate-fade-in space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="font-serif text-xl italic font-normal text-slate-800">Recent Runtimes</h3>
+              <span className="badge badge-purple text-[10px]">{apps.length} active</span>
             </div>
-
-            <div className="page-content">
-              {/* Stats */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
-                {[
-                  { label: "Total Apps", value: apps.length, color: "#7c6ef5" },
-                  { label: "Total Records", value: totalRecords, color: "#22c984" },
-                  { label: "Field Types Used", value: fieldTypes, color: "#ff4d9e" },
-                ].map((stat) => (
-                  <div key={stat.label} className="stat-card">
-                    <div className="stat-dot" style={{ background: stat.color }} />
-                    <div className="stat-value">{stat.value}</div>
-                    <div className="stat-label">{stat.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* AI Assistant quick-forge row */}
-              {apps.length > 0 && (
-                <div className="assistant-card" style={{ marginBottom: 28 }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #7c6ef5, #5544d4)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 2L2 7l10 5 10-5-10-5Z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-                        </svg>
-                      </div>
-                      <div>
-                        <h3 className="font-serif text-xl font-normal text-slate-800 italic">AI App Assistant</h3>
-                        <p className="text-xs text-slate-400 mt-0.5">Describe your app in plain English and we'll generate the schema automatically.</p>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <input
-                        type="text"
-                        className="assistant-input"
-                        style={{ flex: 1, borderRadius: 12, padding: "11px 16px" }}
-                        placeholder="e.g. Student catalog with name, age (number), and enrolled (boolean)..."
-                        value={assistantPrompt}
-                        onChange={(e) => setAssistantPrompt(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleForgeAssistant()}
-                      />
-                      <button
-                        onClick={() => handleForgeAssistant()}
-                        disabled={forging || !assistantPrompt.trim()}
-                        className="btn-primary glow-btn-primary px-5 text-xs font-bold"
-                      >
-                        {forging ? "..." : "Forge →"}
-                      </button>
-                    </div>
-                    {error && <p className="text-xs font-semibold text-red-500">{error}</p>}
-                  </div>
-                </div>
-              )}
-
-              {/* Apps grid */}
-              <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            
+            <div className="carousel-container">
+              {apps.map((app) => (
+                <Link key={app.id} href={`/apps/${app.id}`} className="carousel-card">
                   <div>
-                    <h2 className="font-serif text-xl font-normal text-slate-700 italic">Active runtimes</h2>
-                  </div>
-                  <span className="badge badge-purple">{apps.length} apps</span>
-                </div>
-
-                {loading ? (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
-                    {[1,2,3].map((i) => (
-                      <div key={i} style={{ borderRadius: 16, padding: 20, background: "#fff", border: "1px solid #e6e8ee" }}>
-                        <div className="skeleton" style={{ height: 36, width: 36, borderRadius: 10, marginBottom: 14 }} />
-                        <div className="skeleton" style={{ height: 18, width: "60%", marginBottom: 8 }} />
-                        <div className="skeleton" style={{ height: 13, width: "80%" }} />
-                      </div>
-                    ))}
-                  </div>
-                ) : apps.length === 0 ? (
-                  <div className="assistant-card" style={{ textAlign: "center", padding: "48px 32px" }}>
-                    <div style={{ width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg, #7c6ef5, #5544d4)", display: "grid", placeItems: "center", margin: "0 auto 16px", boxShadow: "0 8px 24px rgba(124,110,245,0.3)" }}>
-                      <span style={{ fontSize: 22, color: "white" }}>✦</span>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="badge badge-purple text-[9px] font-mono px-2 py-0.5">{app.config.entity}</span>
+                      <span className="text-[10px] font-bold text-slate-400">{app._count.records} records</span>
                     </div>
-                    <h3 className="font-serif text-2xl font-normal italic text-slate-800">Forge Your First App</h3>
-                    <p className="text-sm font-medium text-slate-400 mt-2" style={{ maxWidth: 380, margin: "8px auto 24px" }}>
-                      Describe the application you want in plain English, or paste a JSON configuration schema to begin instantly.
-                    </p>
-                    <textarea
-                      rows={3}
-                      className="assistant-input"
-                      style={{ textAlign: "left", resize: "vertical", marginBottom: 12, fontSize: 13 }}
-                      placeholder="e.g. A task tracker with title, priority (enum: Low, Medium, High), dueDate, and completed (boolean)"
-                      value={assistantPrompt}
-                      onChange={(e) => setAssistantPrompt(e.target.value)}
-                    />
-                    {error && <p className="text-xs font-semibold text-red-500" style={{ marginBottom: 12 }}>{error}</p>}
-                    <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-                      <button
-                        onClick={() => handleForgeAssistant()}
-                        disabled={forging || !assistantPrompt.trim()}
-                        className="btn-primary glow-btn-primary px-6 py-2.5 text-xs font-bold gap-2"
-                      >
-                        {forging && <span style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", display: "inline-block" }} className="animate-spin" />}
-                        Forge App Workspace →
-                      </button>
-                      <Link href="/apps/new" className="btn-ghost px-6 py-2.5 text-xs font-bold">
-                        Open Blank Canvas
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
-                    {apps.map((app, index) => (
-                      <Link key={app.id} href={`/apps/${app.id}`} className="app-card" style={{ animationDelay: `${index * 0.05}s` }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                          <div className="app-card-icon">
-                            {app.config.entity.slice(0, 2).toUpperCase()}
-                          </div>
-                          <button
-                            onClick={(e) => handleDelete(app.id, e)}
-                            style={{ padding: "3px 8px", borderRadius: 6, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", color: "#dc2626", fontSize: 10, fontWeight: 700, opacity: 0, transition: "opacity 0.2s" }}
-                            onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
-                            onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                        <div>
-                          <h3 style={{ fontSize: 15, fontWeight: 800, letterSpacing: -0.3, color: "var(--text-primary)" }}>{app.name}</h3>
-                          {app.description && (
-                            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                              {app.description}
-                            </p>
-                          )}
-                        </div>
-                        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
-                            {app.config.fields.slice(0, 3).map((field) => (
-                              <span key={field.name} className={`badge ${TYPE_COLORS[field.type] || "badge-purple"}`}>
-                                {field.name}
-                              </span>
-                            ))}
-                            {app.config.fields.length > 3 && (
-                              <span className="badge badge-purple">+{app.config.fields.length - 3}</span>
-                            )}
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>{app._count.records} records</span>
-                            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, background: "#f1f3f7", padding: "2px 7px", borderRadius: 5, fontWeight: 700, color: "var(--text-secondary)" }}>
-                              {app.config.entity}
-                            </span>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ─── PLAYGROUND TAB ─────────────────────────────────────────────────────── */}
-        {activeTab === "playground" && (
-          <div className="animate-fade-in">
-            <div className="page-header">
-              <div>
-                <h1 className="font-serif text-2xl font-normal italic text-slate-800">Config Validator Playground</h1>
-                <p className="text-xs font-medium text-slate-400 mt-0.5">Test and sanitize broken config objects in real time</p>
-              </div>
-            </div>
-            <div className="page-content">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
-                <div>
-                  <span className="field-label">JSON SCHEMA INPUT</span>
-                  <textarea
-                    className="code-area"
-                    style={{ height: 440, marginTop: 6 }}
-                    value={playgroundInput}
-                    onChange={(e) => setPlaygroundInput(e.target.value)}
-                    placeholder="Enter configuration JSON..."
-                  />
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span className="field-label">VALIDATOR REPORT</span>
-                    {playgroundResult && (
-                      <span className={`badge ${playgroundResult.valid ? (playgroundResult.warnings.length > 0 ? "badge-amber" : "badge-green") : "badge-red"}`}>
-                        {playgroundResult.valid
-                          ? playgroundResult.warnings.length > 0 ? "✓ VALID (WARNINGS)" : "✓ PERFECTLY VALID"
-                          : "✗ INVALID STRUCTURE"}
-                      </span>
+                    <h4 className="font-extrabold text-sm text-slate-800 leading-tight m-0 line-clamp-1">
+                      {app.name}
+                    </h4>
+                    {app.description && (
+                      <p className="text-[11px] text-slate-500 leading-normal mt-1 mb-0 line-clamp-2">
+                        {app.description}
+                      </p>
                     )}
                   </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto" }}>
-                    {playgroundResult?.errors.map((err, i) => (
-                      <div key={i} style={{ borderRadius: 10, border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.06)", padding: "10px 14px" }}>
-                        <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#dc2626", display: "block", marginBottom: 4 }}>Error</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "#b91c1c" }}>{err.message}</span>
-                      </div>
-                    ))}
-                    {playgroundResult?.warnings.map((warn, i) => (
-                      <div key={i} style={{ borderRadius: 10, border: "1px solid rgba(251,191,36,0.25)", background: "rgba(251,191,36,0.07)", padding: "10px 14px" }}>
-                        <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#d97706", display: "block", marginBottom: 4 }}>Warning {warn.field ? `(${warn.field})` : ""}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "#92400e" }}>{warn.message}</span>
-                        {warn.originalValue !== undefined && (
-                          <div style={{ marginTop: 6, fontFamily: "var(--font-mono), monospace", fontSize: 10, color: "#6b7280" }}>
-                            <span style={{ textDecoration: "line-through", background: "rgba(251,191,36,0.15)", padding: "0 4px", borderRadius: 3 }}>{String(warn.originalValue)}</span>
-                            {" → "}
-                            <span style={{ fontWeight: 700, color: "#059669", background: "rgba(16,185,129,0.1)", padding: "0 4px", borderRadius: 3 }}>{String(warn.sanitizedValue)}</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {playgroundResult?.errors.length === 0 && playgroundResult?.warnings.length === 0 && (
-                      <div style={{ padding: "16px", borderRadius: 10, border: "1px solid rgba(16,185,129,0.2)", background: "rgba(16,185,129,0.06)", textAlign: "center" }}>
-                        <p style={{ fontSize: 12, fontWeight: 600, color: "#059669" }}>✓ Config is clean & valid — no issues found.</p>
-                      </div>
-                    )}
+                  <div className="border-t border-slate-100/50 pt-2 flex items-center justify-between text-[10px] text-slate-400 font-bold">
+                    <span>View Runtime &rarr;</span>
+                    <span>{new Date(app.updatedAt).toLocaleDateString()}</span>
                   </div>
-
-                  <div>
-                    <span className="field-label" style={{ marginBottom: 6 }}>SANITIZED CONFIG OUTPUT</span>
-                    <pre className="json-output" style={{ height: 240, fontSize: 11, color: "#a5b4fc", marginTop: 6 }}>
-                      {playgroundResult ? JSON.stringify(playgroundResult.config, null, 2) : ""}
-                    </pre>
-                  </div>
-                </div>
-              </div>
+                </Link>
+              ))}
             </div>
           </div>
+        ) : (
+          <div className="text-center py-6 text-slate-400 text-xs font-semibold bg-white/20 border border-white/40 rounded-2xl">
+            No applications forged yet. Describe your system above to start.
+          </div>
         )}
+      </footer>
 
-        {/* ─── CSV TAB ──────────────────────────────────────────────────────────── */}
-        {activeTab === "csv" && (
-          <div className="animate-fade-in">
-            <div className="page-header">
-              <div>
-                <h1 className="font-serif text-2xl font-normal italic text-slate-800">CSV Reverse Engineering</h1>
-                <p className="text-xs font-medium text-slate-400 mt-0.5">Upload a spreadsheet — auto-infer types and bulk insert all rows</p>
-              </div>
-            </div>
-            <div className="page-content">
-              {!csvFile ? (
-                <div
-                  onDragEnter={handleDrag} onDragOver={handleDrag} onDragLeave={handleDrag} onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`file-dropzone ${dragActive ? "drag-active" : ""}`}
-                  style={{ borderRadius: 16, padding: "64px 32px", textAlign: "center", cursor: "pointer", background: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}
+      {/* ─── CTRL+K COMMAND PALETTE OVERLAY ─────────────────────────────────────── */}
+      {showCmdPalette && (
+        <div className="cmd-palette-backdrop animate-fade-in" onClick={() => setShowCmdPalette(false)}>
+          <div className="cmd-palette-content" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="text"
+              placeholder="Search apps by name or entity..."
+              className="cmd-input font-semibold"
+              autoFocus
+              value={cmdSearch}
+              onChange={(e) => setCmdSearch(e.target.value)}
+            />
+            <div className="p-2 max-h-[320px] overflow-y-auto">
+              <div className="text-[10px] font-bold text-slate-400 uppercase px-3 py-1.5">Applications</div>
+              {filteredCmdApps.map((app) => (
+                <button
+                  key={app.id}
+                  onClick={() => {
+                    router.push(`/apps/${app.id}`);
+                    setShowCmdPalette(false);
+                  }}
+                  className="cmd-item rounded-lg"
                 >
-                  <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" className="hidden" />
-                  <div style={{ width: 56, height: 56, borderRadius: 14, background: "#f1f3f8", border: "1px solid var(--border)", display: "grid", placeItems: "center", marginBottom: 16, fontSize: 22 }}>
-                    ↑
+                  <div className="flex flex-col">
+                    <span className="font-extrabold text-sm text-slate-800">{app.name}</span>
+                    <span className="text-[10px] text-slate-500 font-mono mt-0.5">Entity: {app.config.entity}</span>
                   </div>
-                  <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Drag and drop your spreadsheet</h3>
-                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>Supports .csv files up to 10MB. We parse structure client-side.</p>
-                  <button className="btn-ghost text-xs py-2 px-5 font-bold">Select File</button>
-                </div>
-              ) : (
-                <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 16, borderBottom: "1px solid var(--border)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, color: "#059669" }}>CSV</div>
-                      <div>
-                        <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>{csvFile.name}</h4>
-                        <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{(csvFile.size / 1024).toFixed(1)} KB • {csvRows.length} rows detected</p>
-                      </div>
-                    </div>
-                    <button onClick={resetCsv} className="btn-ghost text-xs py-1.5 px-3">Clear & Upload New</button>
-                  </div>
+                  <span className="badge badge-purple text-[9px]">{app._count.records} records</span>
+                </button>
+              ))}
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, alignItems: "start" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, background: "#fff", padding: 16, borderRadius: 12, border: "1px solid var(--border)" }}>
-                        <div>
-                          <label className="field-label">App Name</label>
-                          <input type="text" className="input" value={csvAppName} onChange={(e) => setCsvAppName(e.target.value)} placeholder="Sales Report" />
-                        </div>
-                        <div>
-                          <label className="field-label">Entity Name</label>
-                          <input type="text" className="input" value={csvEntityName} onChange={(e) => setCsvEntityName(e.target.value)} placeholder="Order" />
-                        </div>
-                      </div>
-
-                      <div className="card" style={{ padding: 16, background: "#fff" }}>
-                        <span className="field-label" style={{ marginBottom: 12 }}>COLUMN MAPPING & SCHEMAS</span>
-                        <div style={{ overflowX: "auto" }}>
-                          <table className="data-table" style={{ fontSize: 12 }}>
-                            <thead>
-                              <tr>
-                                <th>CSV Column</th>
-                                <th>Field Key</th>
-                                <th>Inferred Type</th>
-                                <th>Required</th>
-                                <th>Enum Options</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {csvFields.map((field, index) => (
-                                <tr key={index}>
-                                  <td style={{ color: "var(--text-muted)", fontWeight: 600 }}>{csvHeaders[index]}</td>
-                                  <td>
-                                    <input type="text" value={field.name} onChange={(e) => updateCsvField(index, "name", e.target.value)} className="input" style={{ padding: "6px 10px", fontSize: 11, maxWidth: 130 }} />
-                                  </td>
-                                  <td>
-                                    <select value={field.type} onChange={(e) => updateCsvField(index, "type", e.target.value)} className="select" style={{ padding: "6px 10px", fontSize: 11, maxWidth: 110 }}>
-                                      <option value="string">String</option>
-                                      <option value="number">Number</option>
-                                      <option value="boolean">Boolean</option>
-                                      <option value="enum">Enum</option>
-                                      <option value="date">Date</option>
-                                    </select>
-                                  </td>
-                                  <td style={{ textAlign: "center" }}>
-                                    <input type="checkbox" checked={field.required} onChange={(e) => updateCsvField(index, "required", e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--accent)" }} />
-                                  </td>
-                                  <td>
-                                    {field.type === "enum" ? (
-                                      <input type="text" placeholder="Option1, Option2" value={field.options?.join(", ") || ""} onChange={(e) => updateCsvField(index, "options", e.target.value.split(",").map((o) => o.trim()))} className="input" style={{ padding: "6px 10px", fontSize: 10 }} />
-                                    ) : (
-                                      <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace" }}>—</span>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <span className="field-label">COMPILED CONFIG PREVIEW</span>
-                      <pre className="json-output" style={{ height: 360, fontSize: 11, color: "#94a3b8", overflowY: "auto" }}>{csvPreviewConfig}</pre>
-                      <button onClick={handleCsvImport} disabled={importingCsv || !csvAppName || !csvEntityName} className="btn-primary glow-btn-primary py-3 text-xs font-bold gap-2">
-                        {importingCsv && <span style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", display: "inline-block" }} className="animate-spin" />}
-                        {importingCsv ? "Compiling & Inserting..." : `Create & Insert ${csvRows.length} Rows`}
-                      </button>
-                    </div>
-                  </div>
+              {filteredCmdApps.length === 0 && (
+                <div className="p-4 text-center text-xs text-slate-400 font-bold">
+                  No matching apps found.
                 </div>
               )}
+
+              <div className="border-t border-slate-100 mt-2 pt-2">
+                <div className="text-[10px] font-bold text-slate-400 uppercase px-3 py-1.5">Quick Actions</div>
+                <button
+                  onClick={() => {
+                    router.push("/apps/new");
+                    setShowCmdPalette(false);
+                  }}
+                  className="cmd-item rounded-lg text-xs font-bold text-slate-700"
+                >
+                  Create new app workspace
+                </button>
+                <button
+                  onClick={() => {
+                    router.push("/playground");
+                    setShowCmdPalette(false);
+                  }}
+                  className="cmd-item rounded-lg text-xs font-bold text-slate-700"
+                >
+                  Open Config Playground
+                </button>
+                <button
+                  onClick={() => {
+                    router.push("/import");
+                    setShowCmdPalette(false);
+                  }}
+                  className="cmd-item rounded-lg text-xs font-bold text-slate-700"
+                >
+                  Import spreadsheet (CSV)
+                </button>
+              </div>
+            </div>
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-semibold">
+              <span>Tip: Press ESC to close</span>
+              <span>AppForge Command Center</span>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
     </div>
   );
 }

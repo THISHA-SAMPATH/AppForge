@@ -77,9 +77,9 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#d9dde3] p-3 text-[#07090f] sm:p-5">
-      <section className="relative min-h-[calc(100vh-24px)] overflow-hidden rounded-[22px] border-[10px] border-white bg-[#fbfbfc] grid-bg shadow-[0_18px_55px_rgba(15,23,42,0.12)] sm:min-h-[calc(100vh-40px)] sm:border-[14px]">
-        <div className="absolute inset-4 rounded-[18px] border border-[#e7e9ee]" />
+    <main className="forge-canvas overflow-x-hidden p-3 text-[#07090f] sm:p-5">
+      <section className="relative min-h-[calc(100vh-24px)] overflow-hidden rounded-[22px] border-[10px] border-white/60 bg-white/75 backdrop-blur-md grid-bg shadow-[0_18px_55px_rgba(15,23,42,0.08)] sm:min-h-[calc(100vh-40px)] sm:border-[14px]">
+        <div className="absolute inset-4 rounded-[18px] border border-white/40" />
 
         {/* Navigation pill header */}
         <header

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -67,33 +67,73 @@ function NewAppPageContent() {
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState("");
 
+  // Animation and streaming states
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationStep, setAnimationStep] = useState(4); // 0: centered, 1: sliding up, 2: split-glass reveal, 3: streaming, 4: complete
+
+  // Persistent valid state for preview
+  const [previewFields, setPreviewFields] = useState<FieldConfig[]>(DEFAULT_CONFIG.fields);
+  const [previewEntity, setPreviewEntity] = useState(DEFAULT_CONFIG.entity);
+
   useEffect(() => {
     const prefill = searchParams?.get("prefill");
     const starterName = searchParams?.get("starter");
     const qName = searchParams?.get("name");
     const qDesc = searchParams?.get("desc");
+    const animate = searchParams?.get("animate");
 
     if (qName) setName(decodeURIComponent(qName));
     if (qDesc) setDescription(decodeURIComponent(qDesc));
 
-    if (prefill) {
-      try {
-        const decoded = JSON.parse(decodeURIComponent(prefill));
-        setConfigText(JSON.stringify(decoded, null, 2));
-        return;
-      } catch (e) { console.error("Failed to parse prefill config", e); }
-    }
+    const finalConfig = prefill 
+      ? JSON.parse(decodeURIComponent(prefill))
+      : starterName 
+        ? STARTERS.find((s) => s.label === starterName)?.config || DEFAULT_CONFIG
+        : DEFAULT_CONFIG;
 
-    if (starterName) {
-      const match = STARTERS.find((s) => s.label === starterName);
-      if (match) {
-        setConfigText(JSON.stringify(match.config, null, 2));
-        setName(match.label);
-        setDescription(`${match.label} database and inventory schema.`);
-        return;
-      }
+    const targetText = JSON.stringify(finalConfig, null, 2);
+
+    if (animate === "true") {
+      setIsAnimating(true);
+      setAnimationStep(0);
+      setConfigText("");
+
+      // Step 1: Slide prompt box up
+      const t1 = setTimeout(() => {
+        setAnimationStep(1);
+      }, 300);
+
+      // Step 2: Split reveal
+      const t2 = setTimeout(() => {
+        setAnimationStep(2);
+      }, 1000);
+
+      // Step 3: Stream code
+      const t3 = setTimeout(() => {
+        setAnimationStep(3);
+        let index = 0;
+        const interval = setInterval(() => {
+          const charsToAdd = Math.min(10, targetText.length - index);
+          const chunk = targetText.substring(0, index + charsToAdd);
+          setConfigText(chunk);
+          index += charsToAdd;
+
+          if (index >= targetText.length) {
+            clearInterval(interval);
+            setAnimationStep(4);
+            setIsAnimating(false);
+          }
+        }, 20);
+      }, 1400);
+
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    } else {
+      setConfigText(targetText);
     }
-    setConfigText(JSON.stringify(DEFAULT_CONFIG, null, 2));
   }, [searchParams]);
 
   useEffect(() => {
@@ -103,9 +143,13 @@ function NewAppPageContent() {
       const parsed = JSON.parse(configText);
       const res = validateConfig(parsed);
       setValidation(res);
+      if (res.valid) {
+        setPreviewFields(res.config.fields);
+        setPreviewEntity(res.config.entity);
+      }
     } catch {
       setJsonError("Invalid JSON syntax — check commas, braces, and quotes");
-      setValidation({ valid: false, config: { entity: "Record", fields: [], ui: { layout: "table" } }, warnings: [], errors: [{ message: "Parsing Error: Invalid JSON structure." }] });
+      setValidation({ valid: false, config: { entity: previewEntity, fields: previewFields, ui: { layout: "table" } }, warnings: [], errors: [{ message: "Parsing Error: Invalid JSON structure." }] });
     }
   }, [configText]);
 
@@ -128,15 +172,32 @@ function NewAppPageContent() {
     } finally { setDeploying(false); }
   };
 
-  const currentConfig: AppConfig = (validation?.config as AppConfig) || DEFAULT_CONFIG;
   const initials = session?.user?.name?.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "AF";
-
   const isValidStatus = !jsonError && validation?.valid;
   const hasWarnings = !jsonError && validation?.valid && (validation?.warnings?.length ?? 0) > 0;
   const hasErrors = !!jsonError || (validation && !validation.valid);
 
+  // If we are in the initial entry phase, show full peachy mesh gradient and center box
+  if (animationStep < 2) {
+    return (
+      <div className="forge-canvas flex flex-col items-center justify-center p-6">
+        <div className={`glass-prompt-container p-8 max-w-[640px] w-full text-center transition-all duration-700 ${animationStep === 1 ? "-translate-y-[20vh] opacity-30 scale-95" : ""}`}>
+          <div className="w-12 h-12 bg-[#7c6ef5] rounded-2xl flex items-center justify-center font-black text-white mx-auto mb-6 shadow-lg shadow-[#7c6ef5]/20 animate-bounce">
+            AF
+          </div>
+          <h2 className="font-serif text-3xl font-normal italic mb-3 text-slate-800">Forging your application...</h2>
+          <p className="text-xs text-slate-400 font-semibold mb-6">AppForge is compiling your config schema</p>
+          <div className="text-sm font-semibold text-slate-650 bg-white/40 p-4 rounded-xl border border-white/50 text-left italic">
+            &ldquo;{searchParams?.get("desc") || "Generating database model"}&rdquo;
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-canvas)", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg-canvas)", display: "flex", flexDirection: "column" }} className="animate-fade-in">
+      
       {/* ─── TOP NAV ─────────────────────────────────────────────────────────────── */}
       <header className="top-nav">
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -149,6 +210,7 @@ function NewAppPageContent() {
             <span style={{ fontWeight: 800, color: "var(--text-primary)", fontSize: 13 }}>Forge Workspace</span>
           </div>
         </div>
+        
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* Quick starters */}
           <div style={{ display: "flex", gap: 6 }}>
@@ -178,6 +240,7 @@ function NewAppPageContent() {
             onChange={(e) => setName(e.target.value)}
             placeholder="App name..."
             style={{ fontSize: 18, fontWeight: 800, letterSpacing: -0.5, border: "none", outline: "none", background: "transparent", color: "var(--text-primary)", width: "100%" }}
+            disabled={isAnimating}
           />
           <input
             type="text"
@@ -185,11 +248,11 @@ function NewAppPageContent() {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Add a description..."
             style={{ fontSize: 12, fontWeight: 500, border: "none", outline: "none", background: "transparent", color: "var(--text-muted)", width: "100%", marginTop: 2 }}
+            disabled={isAnimating}
           />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* Validation status pill */}
           <div style={{
             display: "flex", alignItems: "center", gap: 6, padding: "6px 12px",
             borderRadius: 20, fontSize: 11, fontWeight: 700,
@@ -197,8 +260,8 @@ function NewAppPageContent() {
             border: `1px solid ${hasErrors ? "rgba(239,68,68,0.2)" : hasWarnings ? "rgba(251,191,36,0.25)" : isValidStatus ? "rgba(16,185,129,0.2)" : "rgba(148,163,184,0.2)"}`,
             color: hasErrors ? "#dc2626" : hasWarnings ? "#d97706" : isValidStatus ? "#059669" : "#64748b",
           }}>
-            <span>{hasErrors ? "✗" : hasWarnings ? "⚠" : isValidStatus ? "✓" : "○"}</span>
-            <span>{hasErrors ? "JSON Error" : hasWarnings ? "Has Warnings" : isValidStatus ? "Valid Schema" : "Parsing..."}</span>
+            <span>{isAnimating ? "⚡" : hasErrors ? "✗" : hasWarnings ? "⚠" : isValidStatus ? "✓" : "○"}</span>
+            <span>{isAnimating ? "Streaming Code..." : hasErrors ? "JSON Error" : hasWarnings ? "Has Warnings" : isValidStatus ? "Valid Schema" : "Parsing..."}</span>
           </div>
 
           {deployError && (
@@ -207,7 +270,7 @@ function NewAppPageContent() {
 
           <button
             onClick={handleDeploy}
-            disabled={deploying || !validation?.valid || !!jsonError}
+            disabled={deploying || !validation?.valid || !!jsonError || isAnimating}
             className="frixion-btn"
             style={{ padding: "10px 22px", fontSize: 13, fontWeight: 700, borderRadius: 12 }}
           >
@@ -220,30 +283,20 @@ function NewAppPageContent() {
       </div>
 
       {/* ─── SPLIT-PANE CANVAS ───────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", minHeight: 0 }}>
+      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", minHeight: 0 }} className="animate-fade-in">
 
         {/* LEFT PANE — The Forge (Code Editor) */}
         <div className="warm-gradient-bg" style={{ display: "flex", flexDirection: "column", padding: 20, gap: 0, borderRight: "1px solid rgba(226,178,142,0.3)" }}>
-          {/* Pane header */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#d88a5c" }} />
               <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, color: "#7b4c2d", textTransform: "uppercase", letterSpacing: "0.07em" }}>config.json</span>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {STARTERS.map((s) => (
-                <button
-                  key={s.label}
-                  onClick={() => { setConfigText(JSON.stringify(s.config, null, 2)); setName(s.label); setDescription(`${s.label} schema.`); }}
-                  style={{ padding: "3px 8px", borderRadius: 6, background: s.color + "20", border: `1px solid ${s.color}40`, fontSize: 10, fontWeight: 700, color: "#333", cursor: "pointer" }}
-                >
-                  {s.mark}
-                </button>
-              ))}
-            </div>
+            {isAnimating && (
+              <span className="text-[10px] font-bold text-[#b86b3f] animate-pulse">Auto compiling...</span>
+            )}
           </div>
 
-          {/* Editor container */}
           <div className="editor-glass-card" style={{ flex: 1, borderRadius: 16, padding: 16, display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
             <textarea
               className="frixion-textarea"
@@ -252,9 +305,9 @@ function NewAppPageContent() {
               onChange={(e) => setConfigText(e.target.value)}
               placeholder='{\n  "entity": "MyEntity",\n  "fields": [\n    { "name": "title", "type": "string", "required": true }\n  ]\n}'
               spellCheck={false}
+              disabled={isAnimating}
             />
 
-            {/* Validation logs */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 140, overflowY: "auto" }}>
               {jsonError && (
                 <div style={{ borderRadius: 8, border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.07)", padding: "8px 12px", fontSize: 11, fontWeight: 600, color: "#b91c1c" }}>
@@ -282,84 +335,95 @@ function NewAppPageContent() {
 
         {/* RIGHT PANE — Live Runtime Preview */}
         <div style={{ background: "#fff", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {/* Pane header */}
           <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <h3 className="font-serif" style={{ fontSize: 18, fontWeight: 400, fontStyle: "italic", color: "var(--text-primary)", lineHeight: 1 }}>Live Compiled UI</h3>
               <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", marginTop: 3 }}>Real-Time Component Preview</p>
             </div>
-            {currentConfig.entity && (
+            {previewEntity && (
               <span className="badge badge-purple" style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10 }}>
-                entity: {currentConfig.entity}
+                entity: {previewEntity}
               </span>
             )}
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-            {currentConfig.fields.length === 0 ? (
+            {previewFields.length === 0 ? (
               <div style={{ textAlign: "center", padding: "48px 24px" }}>
                 <div style={{ fontSize: 28, marginBottom: 12, color: "#cbd5e1" }}>◈</div>
                 <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-muted)" }}>No fields defined yet.</p>
                 <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>Add fields in the JSON editor to see interactive components appear here.</p>
-                <pre style={{ marginTop: 16, background: "#f8fafc", borderRadius: 10, padding: "12px 14px", textAlign: "left", fontSize: 11, color: "#64748b", fontFamily: "var(--font-mono), monospace", display: "inline-block" }}>
-{`"fields": [
-  { "name": "title", "type": "string" }
-]`}
-                </pre>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {currentConfig.fields.map((field) => (
-                  <div key={field.name} style={{ borderRadius: 12, border: "1px solid var(--border)", padding: "14px 16px", background: "#fafbff", transition: "all 0.2s" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ width: 24, height: 24, borderRadius: 6, background: "var(--bg-hover)", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 900, color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
-                          {TYPE_ICONS[field.type] || "?"}
-                        </span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
-                          {field.name}
-                          {field.required && <span style={{ color: "var(--red)", marginLeft: 2 }}>*</span>}
-                        </span>
-                      </div>
-                      <span className={`badge ${TYPE_COLORS[field.type] || "badge-purple"}`}>{field.type}</span>
-                    </div>
-
-                    {/* Rendered component preview */}
-                    {field.type === "boolean" ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 44, height: 24, borderRadius: 12, background: "#e2e8f0", position: "relative", cursor: "pointer" }}>
-                          <div style={{ position: "absolute", top: 2, left: 2, width: 20, height: 20, borderRadius: "50%", background: "white", boxShadow: "0 1px 4px rgba(0,0,0,0.15)" }} />
+                {previewFields.map((field) => {
+                  const isUnknown = !["string", "number", "boolean", "enum", "date"].includes(field.type);
+                  
+                  if (isUnknown) {
+                    return (
+                      <div key={field.name} className="border border-amber-250 bg-amber-50/50 p-4 rounded-xl flex flex-col gap-1.5 animate-fade-in">
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <span style={{ fontSize: 13, fontWeight: 750, color: "var(--text-primary)" }}>{field.name}</span>
+                          <span className="badge badge-amber text-[9px]">{field.type}</span>
                         </div>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>Yes / No Toggle</span>
+                        <p className="text-[11px] font-semibold text-amber-700 m-0">
+                          ⚠️ Oops, unknown data type &quot;{field.type}&quot;. FallbackField registry caught this gracefully.
+                        </p>
                       </div>
-                    ) : field.type === "enum" && field.options ? (
-                      <select className="select" disabled style={{ fontSize: 12 }}>
-                        <option value="">Select {field.name}...</option>
-                        {field.options.map((opt) => (<option key={opt}>{opt}</option>))}
-                      </select>
-                    ) : field.type === "date" ? (
-                      <div style={{ position: "relative" }}>
-                        <input type="date" className="input" disabled style={{ fontSize: 12, background: "#fafbff", cursor: "default" }} />
+                    );
+                  }
+
+                  return (
+                    <div key={field.name} style={{ borderRadius: 12, border: "1px solid var(--border)", padding: "14px 16px", background: "#fafbff", transition: "all 0.2s" }} className="animate-fade-in">
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ width: 24, height: 24, borderRadius: 6, background: "var(--bg-hover)", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 900, color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+                            {TYPE_ICONS[field.type] || "?"}
+                          </span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
+                            {field.name}
+                            {field.required && <span style={{ color: "var(--red)", marginLeft: 2 }}>*</span>}
+                          </span>
+                        </div>
+                        <span className={`badge ${TYPE_COLORS[field.type] || "badge-purple"}`}>{field.type}</span>
                       </div>
-                    ) : field.type === "number" ? (
-                      <input type="number" className="input" placeholder={`Enter ${field.name}...`} disabled style={{ fontSize: 12, background: "#fafbff" }} />
-                    ) : (
-                      <input type="text" className="input" placeholder={`Enter ${field.name}...`} disabled style={{ fontSize: 12, background: "#fafbff" }} />
-                    )}
-                  </div>
-                ))}
+
+                      {field.type === "boolean" ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 44, height: 24, borderRadius: 12, background: "#e2e8f0", position: "relative", cursor: "pointer" }}>
+                            <div style={{ position: "absolute", top: 2, left: 2, width: 20, height: 20, borderRadius: "50%", background: "white", boxShadow: "0 1px 4px rgba(0,0,0,0.15)" }} />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>Yes / No Toggle</span>
+                        </div>
+                      ) : field.type === "enum" && field.options ? (
+                        <select className="select" disabled style={{ fontSize: 12 }}>
+                          <option value="">Select {field.name}...</option>
+                          {field.options.map((opt) => (<option key={opt}>{opt}</option>))}
+                        </select>
+                      ) : field.type === "date" ? (
+                        <div style={{ position: "relative" }}>
+                          <input type="date" className="input" disabled style={{ fontSize: 12, background: "#fafbff", cursor: "default" }} />
+                        </div>
+                      ) : field.type === "number" ? (
+                        <input type="number" className="input" placeholder={`Enter ${field.name}...`} disabled style={{ fontSize: 12, background: "#fafbff" }} />
+                      ) : (
+                        <input type="text" className="input" placeholder={`Enter ${field.name}...`} disabled style={{ fontSize: 12, background: "#fafbff" }} />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {/* Compiled table preview */}
-            {currentConfig.fields.length > 0 && (
+            {previewFields.length > 0 && (
               <div style={{ marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 20 }}>
                 <span className="field-label" style={{ marginBottom: 10 }}>COMPILED DATA GRID VIEW</span>
                 <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                     <thead>
                       <tr style={{ background: "#f8fafc" }}>
-                        {currentConfig.fields.slice(0, 4).map((f) => (
+                        {previewFields.slice(0, 4).map((f) => (
                           <th key={f.name} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", fontSize: 10, borderBottom: "1px solid var(--border)" }}>
                             {f.name}
                           </th>
@@ -369,17 +433,22 @@ function NewAppPageContent() {
                     </thead>
                     <tbody>
                       <tr>
-                        {currentConfig.fields.slice(0, 4).map((f) => (
-                          <td key={f.name} style={{ padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 500 }}>
-                            {f.type === "boolean" ? (
-                              <span className="badge badge-green" style={{ fontSize: 9 }}>Yes</span>
-                            ) : f.type === "enum" ? (
-                              <span className="badge badge-purple" style={{ fontSize: 9 }}>{f.options?.[0] || "value"}</span>
-                            ) : f.type === "date" ? "2026-06-05"
-                              : f.type === "number" ? "42"
-                              : "Sample data"}
-                          </td>
-                        ))}
+                        {previewFields.slice(0, 4).map((f) => {
+                          const isUnknown = !["string", "number", "boolean", "enum", "date"].includes(f.type);
+                          return (
+                            <td key={f.name} style={{ padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 500 }}>
+                              {isUnknown ? (
+                                <span className="text-amber-600 font-bold italic">fallback</span>
+                              ) : f.type === "boolean" ? (
+                                <span className="badge badge-green" style={{ fontSize: 9 }}>Yes</span>
+                              ) : f.type === "enum" ? (
+                                <span className="badge badge-purple" style={{ fontSize: 9 }}>{f.options?.[0] || "value"}</span>
+                              ) : f.type === "date" ? "2026-06-05"
+                                : f.type === "number" ? "42"
+                                : "Sample data"}
+                            </td>
+                          );
+                        })}
                         <td style={{ padding: "10px 12px", color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }}>just now</td>
                       </tr>
                     </tbody>

@@ -119,9 +119,9 @@ export default function PlaygroundPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#d9dde3] p-3 text-[#07090f] sm:p-5">
-      <section className="relative min-h-[calc(100vh-24px)] overflow-hidden rounded-[22px] border-[10px] border-white bg-[#fbfbfc] shadow-[0_18px_55px_rgba(15,23,42,0.12)] sm:min-h-[calc(100vh-40px)] sm:border-[14px]">
-        <div className="absolute inset-4 rounded-[18px] border border-[#e7e9ee]" />
+    <div className="forge-canvas p-3 text-[#07090f] sm:p-5">
+      <section className="relative min-h-[calc(100vh-24px)] overflow-hidden rounded-[22px] border-[10px] border-white/60 bg-white/70 backdrop-blur-md shadow-[0_18px_55px_rgba(15,23,42,0.08)] sm:min-h-[calc(100vh-40px)] sm:border-[14px]">
+        <div className="absolute inset-4 rounded-[18px] border border-white/40" />
 
         {/* Header */}
         <header className="relative z-40 mx-auto mt-6 flex h-14 items-center justify-between gap-2 rounded-2xl px-4 spark-nav max-w-7xl">

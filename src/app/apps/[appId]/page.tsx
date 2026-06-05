@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { Octokit } from "@octokit/rest";
 import type { AppConfig, FieldConfig } from "@/types/config";
 
@@ -33,6 +33,14 @@ const TYPE_COLORS: Record<string, string> = {
   date: "badge-red",
 };
 
+const TYPE_ICONS: Record<string, string> = {
+  string: "Aa",
+  number: "12",
+  boolean: "◎",
+  enum: "≡",
+  date: "📅",
+};
+
 function FieldInput({
   field,
   value,
@@ -42,15 +50,34 @@ function FieldInput({
   value: unknown;
   onChange: (v: unknown) => void;
 }) {
+  const isUnknown = !["string", "number", "boolean", "enum", "date"].includes(field.type);
+
+  if (isUnknown) {
+    return (
+      <div className="border border-amber-250 bg-amber-50/50 p-3.5 rounded-xl flex flex-col gap-1">
+        <span className="text-xs text-amber-700 font-bold">
+          Fallback Field: Raw string editor for type &quot;{field.type}&quot;
+        </span>
+        <input
+          type="text"
+          className="input"
+          placeholder={`Enter raw data...`}
+          value={String(value ?? "")}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </div>
+    );
+  }
+
   if (field.type === "boolean")
     return (
       <div className="flex items-center gap-3 cursor-pointer py-1">
         <button
           type="button"
           onClick={() => onChange(!value)}
-          className="w-11 h-6 rounded-full transition-colors relative cursor-pointer outline-none"
+          className="w-11 h-6 rounded-full transition-colors relative cursor-pointer outline-none border-none"
           style={{
-            background: value ? "var(--accent)" : "var(--border-bright)",
+            background: value ? "var(--accent)" : "rgba(0,0,0,0.12)",
           }}
         >
           <div
@@ -61,7 +88,7 @@ function FieldInput({
             }}
           />
         </button>
-        <span className="text-sm font-bold" style={{ color: "var(--text-secondary)" }}>
+        <span className="text-sm font-bold text-slate-700">
           {value ? "Yes" : "No"}
         </span>
       </div>
@@ -160,7 +187,7 @@ function RecordForm({
               {f.required && <span className="text-[var(--red)]">*</span>}
             </span>
             <span
-              className={`badge ${TYPE_COLORS[f.type]}`}
+              className={`badge ${TYPE_COLORS[f.type] || "badge-purple"}`}
               style={{ textTransform: "none", letterSpacing: 0 }}
             >
               {f.type}
@@ -199,10 +226,12 @@ function RecordForm({
 
 export default function AppPage() {
   const params = useParams();
+  const router = useRouter();
   const appId = params?.appId as string;
   const { data: session } = useSession();
   const [app, setApp] = useState<AppData | null>(null);
   const [records, setRecords] = useState<AppRecord[]>([]);
+  const [allApps, setAllApps] = useState<AppData[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"table" | "new" | "edit" | "config" | "github">("table");
   const [editing, setEditing] = useState<AppRecord | null>(null);
@@ -211,6 +240,11 @@ export default function AppPage() {
   const [configErr, setConfigErr] = useState("");
   const [updating, setUpdating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // UI state
+  const [showSwitcherDropdown, setShowSwitcherDropdown] = useState(false);
+  const [showPwaModal, setShowPwaModal] = useState(false);
+  const switcherRef = useRef<HTMLDivElement>(null);
 
   // Version Comparison Modal state
   const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<any | null>(null);
@@ -229,7 +263,6 @@ export default function AppPage() {
     if (d.success) {
       setApp(d.data);
       setConfigText(JSON.stringify(d.data.config, null, 2));
-      // Prefill repo name if blank
       if (!githubRepoName) {
         setGithubRepoName(`appforge-${d.data.config.entity.toLowerCase()}-runtime`);
       }
@@ -245,27 +278,53 @@ export default function AppPage() {
     [appId],
   );
 
+  const loadAllApps = useCallback(async () => {
+    const r = await fetch("/api/apps");
+    const d = await r.json();
+    if (d.success) setAllApps(d.data);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-
     queueMicrotask(() => {
       void loadApp().finally(() => {
         if (!cancelled) setLoading(false);
       });
+      void loadAllApps();
     });
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (switcherRef.current && !switcherRef.current.contains(event.target as Node)) {
+        setShowSwitcherDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
       cancelled = true;
+      document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [loadApp]);
+  }, [loadApp, loadAllApps]);
 
   useEffect(() => {
     if (!app) return;
-
     queueMicrotask(() => {
       void loadRecords(app.config);
     });
-  }, [app, loadRecords]);
+
+    // Dynamic Manifest injection for PWA
+    let link = document.querySelector("link[rel='manifest']") as HTMLLinkElement;
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "manifest";
+      document.head.appendChild(link);
+    }
+    link.href = `/api/apps/${appId}/manifest`;
+
+    return () => {
+      if (link) link.href = "";
+    };
+  }, [app, loadRecords, appId]);
 
   const handleSave = async (formData: { [k: string]: unknown }) => {
     if (!app) return;
@@ -349,13 +408,10 @@ export default function AppPage() {
 
     try {
       const octokit = new Octokit({ auth: githubToken.trim() });
-      
-      // 1. Get current username
       const userRes = await octokit.users.getAuthenticated();
       const owner = userRes.data.login;
       addLog(`Authenticated as GitHub user: @${owner}`);
 
-      // 2. Create Repository
       addLog(`Checking if repository "${owner}/${githubRepoName}" already exists...`);
       let repoExists = false;
       try {
@@ -373,26 +429,18 @@ export default function AppPage() {
         addLog(`Repository created successfully!`);
       }
 
-      // Generate files
       addLog("Generating Next.js application codebase files...");
       const filesMap = generateNextJsAppCode(app!.name, app!.config, records);
 
-      // 3. Push files to main branch
-      addLog("Compiling commit structure...");
-      
-      // Get reference to branch head (default main)
       let sha: string | undefined;
       try {
         const refRes = await octokit.git.getRef({ owner, repo: githubRepoName, ref: "heads/main" });
         sha = refRes.data.object.sha;
-      } catch {
-        // Empty repo, needs initial files
-      }
+      } catch {}
 
       const filePaths = Object.keys(filesMap);
       
       if (!sha) {
-        // If repository is brand new and empty, create files individually
         for (const filePath of filePaths) {
           addLog(`Creating file: ${filePath}`);
           await octokit.repos.createOrUpdateFileContents({
@@ -404,7 +452,6 @@ export default function AppPage() {
           });
         }
       } else {
-        // If repo exists, commit via git tree/commit flows
         addLog("Creating Git Blobs...");
         const blobs = await Promise.all(
           filePaths.map(async (p) => {
@@ -460,7 +507,6 @@ export default function AppPage() {
     setExportLogs((p) => [...p, msg]);
   };
 
-  // Static files generation engine for NextJS
   const generateNextJsAppCode = (appName: string, config: AppConfig, records: any[]) => {
     const schemaJson = JSON.stringify(config, null, 2);
     const seedJson = JSON.stringify(records, null, 2);
@@ -605,7 +651,7 @@ export default function Home() {
       <div className="max-w-6xl mx-auto space-y-8">
         <header className="flex justify-between items-center bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">${appName}</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight">{schema.entity} Directory</h1>
             <p className="text-sm text-slate-500 font-medium mt-0.5">Manage records for entity <strong>{schema.entity}</strong></p>
           </div>
           <button 
@@ -629,10 +675,10 @@ export default function Home() {
 
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in duration-200">
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <h3 className="font-extrabold text-lg">{editing ? "Edit Record" : "Add New Record"}</h3>
-                <button type="button" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+                <button type="button" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 font-bold border-none bg-transparent cursor-pointer">✕</button>
               </div>
               <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                 {schema.fields.map((field: any) => (
@@ -645,7 +691,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => setFormData({ ...formData, [field.name]: !formData[field.name] })}
-                          className={"w-11 h-6 rounded-full relative transition-colors duration-200 " + (formData[field.name] ? "bg-indigo-600" : "bg-slate-200")}
+                          className={"w-11 h-6 rounded-full relative transition-colors duration-200 border-none cursor-pointer " + (formData[field.name] ? "bg-indigo-600" : "bg-slate-200")}
                         >
                           <div className={"w-5 h-5 bg-white rounded-full absolute top-0.5 left-0.5 transition-transform duration-200 " + (formData[field.name] ? "translate-x-5" : "")} />
                         </button>
@@ -691,8 +737,8 @@ export default function Home() {
                   </div>
                 ))}
                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                  <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm font-bold border border-slate-200 rounded-xl hover:bg-slate-50 transition">Cancel</button>
-                  <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition">Save Record</button>
+                  <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm font-bold border border-slate-200 rounded-xl hover:bg-slate-50 transition border-solid bg-transparent cursor-pointer">Cancel</button>
+                  <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition border-none cursor-pointer">Save Record</button>
                 </div>
               </form>
             </div>
@@ -743,8 +789,8 @@ export default function Home() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2.5">
-                          <button onClick={() => startEdit(r)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition">Edit</button>
-                          <button onClick={() => handleDelete(r.id)} className="text-xs font-bold text-rose-600 hover:text-rose-800 transition">Delete</button>
+                          <button onClick={() => startEdit(r)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition border-none bg-transparent cursor-pointer">Edit</button>
+                          <button onClick={() => handleDelete(r.id)} className="text-xs font-bold text-rose-600 hover:text-rose-800 transition border-none bg-transparent cursor-pointer">Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -757,8 +803,7 @@ export default function Home() {
       </div>
     </div>
   );
-}
-`;
+}`;
 
     return {
       "package.json": packageJson,
@@ -815,6 +860,8 @@ body {
   const renderCell = (value: unknown, type: string) => {
     if (value === null || value === undefined || value === "")
       return <span style={{ color: "var(--text-muted)" }}>—</span>;
+    if (!["string", "number", "boolean", "enum", "date"].includes(type))
+      return <span className="text-amber-600 font-bold italic">Fallback: {String(value)}</span>;
     if (type === "boolean")
       return (
         <span className={`badge ${value ? "badge-green" : "badge-red"}`}>
@@ -836,9 +883,11 @@ body {
     });
   });
 
+  const appUrl = typeof window !== "undefined" ? window.location.origin + "/apps/" + appId : "";
+
   if (loading)
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-canvas)" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-canvas)" }} className="flex justify-center items-center">
         <div style={{ width: 32, height: 32, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%" }} className="animate-spin" />
       </div>
     );
@@ -848,7 +897,7 @@ body {
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-canvas)" }}>
         <div style={{ textAlign: "center", background: "#fff", padding: 32, borderRadius: 16, border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}>
           <p style={{ marginBottom: 16, fontSize: 14, fontWeight: 600, color: "var(--text-muted)" }}>App workspace not found</p>
-          <Link href="/dashboard" className="btn-primary text-xs font-bold px-4 py-2">
+          <Link href="/dashboard" className="btn-primary text-xs font-bold px-4 py-2 text-decoration-none">
             Back to Dashboard
           </Link>
         </div>
@@ -856,202 +905,192 @@ body {
     );
 
   return (
-    <div className="sidebar-shell">
-      {/* ─── DARK SIDEBAR ─────────────────────────────────────────────────────────── */}
-      <aside className="sidebar">
-        {/* Logo */}
-        <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">AF</div>
-          <span className="sidebar-logo-text">AppForge</span>
-        </div>
+    <div style={{ minHeight: "100vh", background: "var(--bg-canvas)", display: "flex", flexDirection: "column" }}>
+      
+      {/* ─── BREADCRUMB SWITCHER HEAD FLOATING NAV ─────────────────────────────── */}
+      <header className="forge-topnav">
+        <div className="flex items-center gap-2" ref={switcherRef}>
+          <Link href="/dashboard" className="text-decoration-none font-extrabold text-sm text-[#7c6ef5]">AppForge</Link>
+          <span className="text-slate-300 font-semibold text-xs">/</span>
+          
+          <div className="relative">
+            <button
+              onClick={() => setShowSwitcherDropdown((prev) => !prev)}
+              className="text-xs font-extrabold text-slate-800 bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1.5 rounded-lg border-none cursor-pointer flex items-center gap-1.5"
+            >
+              <span>📦 {app.name}</span>
+              <span className="text-[10px] text-slate-400">▼</span>
+            </button>
 
-        {/* Back to dashboard */}
-        <div className="sidebar-section" style={{ paddingTop: 8, paddingBottom: 4 }}>
-          <Link href="/dashboard" className="sidebar-link">
-            <svg className="sidebar-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 5l-7 7 7 7" />
-            </svg>
-            Back to Dashboard
-          </Link>
-        </div>
-
-        {/* App info */}
-        <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border-dark)", borderBottom: "1px solid var(--border-dark)" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-sidebar-muted)", marginBottom: 6 }}>Current App</div>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "rgba(255,255,255,0.9)", letterSpacing: -0.2, lineHeight: 1.2 }}>{app.name}</div>
-          <div style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
-            <span className="badge badge-purple" style={{ fontSize: 10 }}>{app.config.entity}</span>
-            <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-sidebar-muted)" }}>{records.length} records</span>
+            {showSwitcherDropdown && (
+              <div className="dropdown-glass-menu" style={{ left: 0, width: 220 }}>
+                <div className="p-2 border-b border-slate-100 bg-white/20">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Switch Runtime</span>
+                </div>
+                <div className="p-1 flex flex-col max-h-[200px] overflow-y-auto">
+                  {allApps.map((a) => (
+                    <Link
+                      key={a.id}
+                      href={`/apps/${a.id}`}
+                      onClick={() => setShowSwitcherDropdown(false)}
+                      className={`text-xs font-bold text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-decoration-none transition ${a.id === appId ? "bg-slate-50 text-[#7c6ef5]" : ""}`}
+                    >
+                      {a.name}
+                    </Link>
+                  ))}
+                  {allApps.length <= 1 && (
+                    <span className="text-[11px] p-2 text-slate-400 italic">No other apps forged yet</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* View Navigation */}
-        <div className="sidebar-section" style={{ marginTop: 4 }}>
-          <p className="sidebar-section-label">Views</p>
+        {/* Center Floating Tab Bar Selector */}
+        <div className="tab-bar-pill">
           <button
             onClick={() => setView("table")}
-            className={`sidebar-link ${(view === "table" || view === "new" || view === "edit") ? "active" : ""}`}
+            className={`tab-bar-item ${(view === "table" || view === "new" || view === "edit") ? "active" : ""}`}
           >
-            <svg className="sidebar-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" />
-            </svg>
-            Records Table
+            Records
           </button>
           <button
             onClick={() => setView("config")}
-            className={`sidebar-link ${view === "config" ? "active" : ""}`}
+            className={`tab-bar-item ${view === "config" ? "active" : ""}`}
           >
-            <svg className="sidebar-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-            </svg>
             Schema Config
           </button>
           <button
             onClick={() => setView("github")}
-            className={`sidebar-link ${view === "github" ? "active" : ""}`}
+            className={`tab-bar-item ${view === "github" ? "active" : ""}`}
           >
-            <svg className="sidebar-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-            </svg>
             GitHub Export
           </button>
         </div>
 
-        {/* Add record shortcut */}
-        <div style={{ padding: "8px 12px" }}>
+        {/* Right Action buttons */}
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => { setView("new"); setEditing(null); }}
-            className="btn-primary glow-btn-primary"
-            style={{ width: "100%", fontSize: 12, padding: "9px 12px", borderRadius: 10, justifyContent: "center" }}
+            onClick={() => setShowPwaModal(true)}
+            className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border-none cursor-pointer transition flex items-center gap-1"
           >
-            + Add Record
+            <span>📱 Deploy to Phone</span>
           </button>
+          <Link href="/dashboard" className="text-xs font-bold text-slate-650 hover:text-slate-800 transition text-decoration-none">
+            Dashboard
+          </Link>
         </div>
+      </header>
 
-        {/* Field type summary */}
-        {app.config.fields.length > 0 && (
-          <div style={{ padding: "12px 20px" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-sidebar-muted)", marginBottom: 8 }}>Schema Fields</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {app.config.fields.map((f) => (
-                <div key={f.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0" }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.65)", fontFamily: "var(--font-mono), monospace" }}>{f.name}</span>
-                  <span className={`badge ${TYPE_COLORS[f.type]}`} style={{ fontSize: 9 }}>{f.type}</span>
-                </div>
-              ))}
+      {/* ─── APP RUNTIME BODY CONTAINER ─────────────────────────────────────────── */}
+      <main style={{ paddingTop: 90, paddingLeft: 24, paddingRight: 24, paddingBottom: 40, maxWidth: 1200, width: "100%", margin: "0 auto" }}>
+        
+        {view === "table" && (
+          <div className="animate-fade-in space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="font-serif text-3xl font-normal italic text-slate-800 tracking-tight">Active records</h1>
+                <p className="text-xs font-medium text-slate-400 mt-1">Live CRUD rows parsed against schema validators</p>
+              </div>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <input
+                  type="text"
+                  placeholder="Search records..."
+                  className="input"
+                  style={{ maxWidth: 220, padding: "8px 14px", fontSize: 12 }}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <button
+                  onClick={() => { setView("new"); setEditing(null); }}
+                  className="btn-primary glow-btn-primary text-xs py-2 px-4 font-bold"
+                >
+                  + Insert Record
+                </button>
+              </div>
             </div>
+
+            {records.length === 0 ? (
+              <div className="text-center py-20 bg-white/70 backdrop-blur border border-slate-200 rounded-2xl">
+                <div className="text-3xl mb-3 font-mono text-slate-300">◈</div>
+                <h3 className="text-base font-extrabold text-slate-700">No records saved</h3>
+                <p className="text-xs font-semibold text-slate-400 mt-1 max-w-xs mx-auto">
+                  Start by inserting your first record using the layout builder fields.
+                </p>
+                <button onClick={() => setView("new")} className="btn-primary glow-btn-primary mt-6 text-xs py-2.5 px-5 font-bold">
+                  + Insert Record
+                </button>
+              </div>
+            ) : (
+              <div className="card overflow-hidden bg-white border border-slate-200 shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        {app.config.fields.map((f) => (
+                          <th key={f.name}>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-extrabold text-slate-650">{f.name}</span>
+                              <span className={`badge ${TYPE_COLORS[f.type] || "badge-purple"}`}>
+                                {f.type}
+                              </span>
+                            </div>
+                          </th>
+                        ))}
+                        <th>Created</th>
+                        <th className="text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRecords.map((record) => (
+                        <tr key={record.id}>
+                          {app.config.fields.map((f) => (
+                            <td key={f.name} className="font-semibold text-slate-700">
+                              {renderCell(record[f.name], f.type)}
+                            </td>
+                          ))}
+                          <td className="text-xs font-semibold text-slate-400">
+                            {new Date(record.createdAt).toLocaleDateString()}
+                          </td>
+                          <td>
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={() => {
+                                  setEditing(record);
+                                  setView("edit");
+                                }}
+                                className="text-[11px] font-bold px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 transition border-none cursor-pointer"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(record.id)}
+                                className="text-[11px] font-bold px-2 py-1 rounded bg-red-50 hover:bg-red-100 text-[#e44949] transition border-none cursor-pointer"
+                              >
+                                Del
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
-      </aside>
 
-      {/* ─── MAIN CONTENT ─────────────────────────────────────────────────────────── */}
-      <div className="main-content">
-          {view === "table" && (
-            <div className="animate-fade-in">
-              <div className="page-header">
-                <div>
-                  <h1 className="font-serif text-2xl font-normal italic text-slate-800">Active records</h1>
-                  <p className="text-xs font-medium text-slate-400 mt-0.5">Live CRUD rows matched against schema types</p>
-                </div>
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <input
-                    type="text"
-                    placeholder="Search in fields..."
-                    className="input"
-                    style={{ maxWidth: 220, padding: "8px 14px", fontSize: 12 }}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                  {searchQuery && (
-                    <button onClick={() => setSearchQuery("")} className="btn-ghost text-xs py-1.5 px-2.5">Clear</button>
-                  )}
-                </div>
-              </div>
-              <div className="page-content">
-
-              {records.length === 0 ? (
-                <div className="text-center py-20 bg-white rounded-xl border border-slate-200">
-                  <div className="text-3xl mb-3 font-mono text-slate-300">◈</div>
-                  <h3 className="text-base font-black text-slate-700">No records saved</h3>
-                  <p className="text-xs font-semibold text-slate-400 mt-1 max-w-xs mx-auto">
-                    Start by inserting your first record using the layout builder fields.
-                  </p>
-                  <button onClick={() => setView("new")} className="btn-primary glow-btn-primary mt-6 text-xs py-2 px-4 font-bold">
-                    + Insert Record
-                  </button>
-                </div>
-              ) : (
-                <div className="card overflow-hidden bg-white border border-slate-200 shadow-sm">
-                  <div className="overflow-x-auto">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          {app.config.fields.map((f) => (
-                            <th key={f.name}>
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-extrabold text-slate-600">{f.name}</span>
-                                <span className={`badge ${TYPE_COLORS[f.type]}`}>
-                                  {f.type}
-                                </span>
-                              </div>
-                            </th>
-                          ))}
-                          <th>Created</th>
-                          <th className="text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredRecords.map((record) => (
-                          <tr key={record.id}>
-                            {app.config.fields.map((f) => (
-                              <td key={f.name} className="font-semibold text-slate-700">
-                                {renderCell(record[f.name], f.type)}
-                              </td>
-                            ))}
-                            <td className="text-xs font-semibold text-slate-400">
-                              {new Date(record.createdAt as string).toLocaleDateString()}
-                            </td>
-                            <td>
-                              <div className="flex gap-2 justify-end">
-                                <button
-                                  onClick={() => {
-                                    setEditing(record);
-                                    setView("edit");
-                                  }}
-                                  className="text-[11px] font-bold px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 transition"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(record.id)}
-                                  className="text-[11px] font-bold px-2 py-1 rounded bg-red-50 hover:bg-red-100 text-[#e44949] transition"
-                                >
-                                  Del
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-              </div>
+        {(view === "new" || view === "edit") && (
+          <div className="animate-fade-in space-y-6">
+            <div>
+              <h1 className="font-serif text-3xl font-normal italic text-slate-800">
+                {view === "edit" ? `Edit ${app.config.entity}` : `Add new ${app.config.entity}`}
+              </h1>
+              <p className="text-xs font-medium text-slate-400 mt-1">Fields are autocompiled from configurations.</p>
             </div>
-          )}
-
-          {(view === "new" || view === "edit") && (
-            <div className="animate-fade-in">
-              <div className="page-header">
-                <div>
-                  <h1 className="font-serif text-2xl font-normal italic text-slate-800">
-                    {view === "edit" ? `Edit ${app.config.entity}` : `Add new ${app.config.entity}`}
-                  </h1>
-                  <p className="text-xs font-medium text-slate-400 mt-0.5">Fields are auto-compiled from schema configurations.</p>
-                </div>
-              </div>
-              <div className="page-content" style={{ maxWidth: 560 }}>
+            <div style={{ maxWidth: 560 }}>
               <div className="card p-6 bg-white border border-slate-200 shadow-sm">
                 <RecordForm
                   config={app.config}
@@ -1064,81 +1103,77 @@ body {
                   saving={saving}
                 />
               </div>
-              </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {view === "config" && (
-            <div className="animate-fade-in">
-              <div className="page-header">
-                <div>
-                  <h1 className="font-serif text-2xl font-normal italic text-slate-800">Schema Config Editor</h1>
-                  <p className="text-xs font-medium text-slate-400 mt-0.5">Edits automatically save version histories</p>
-                </div>
-                <div>
-                  <button
-                    onClick={() => handleConfigSave()}
-                    disabled={updating}
-                    className="frixion-btn px-6 py-2.5 text-xs font-bold gap-2"
-                  >
-                    {updating && (
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    )}
-                    {updating ? "Saving schema..." : "⚡ Save Config & Compile"}
-                  </button>
-                </div>
+        {view === "config" && (
+          <div className="animate-fade-in space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="font-serif text-3xl font-normal italic text-slate-800">Schema Config Editor</h1>
+                <p className="text-xs font-medium text-slate-400 mt-1">Updates save configuration version history automatically</p>
               </div>
-              <div className="page-content">
+              <button
+                onClick={() => handleConfigSave()}
+                disabled={updating}
+                className="frixion-btn px-6 py-2.5 text-xs font-bold gap-2"
+              >
+                {updating && (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                )}
+                {updating ? "Saving..." : "⚡ Save Config & Compile"}
+              </button>
+            </div>
 
-              {/* Split-Pane Glass Canvas */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* Left Pane: The Forge Code Editor */}
-                <div className="warm-gradient-bg rounded-[20px] p-6 shadow-[0_12px_40px_rgba(226,178,142,0.12)] border border-[#e8d2c0] flex flex-col min-h-[450px]">
-                  <div className="editor-glass-card rounded-2xl p-5 flex-1 flex flex-col space-y-4">
-                    <div className="flex items-center justify-between border-b border-white/40 pb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#d88a5c]" />
-                        <span className="font-mono text-xs font-bold text-[#7b4c2d] uppercase tracking-wider">config.json</span>
-                      </div>
-                      
-                      {configErr ? (
-                        <span className="badge badge-red text-[10px]">✗ ERROR</span>
-                      ) : (
-                        <span className="badge badge-green text-[10px]">✓ COMPILED</span>
-                      )}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Left Pane: Editor */}
+              <div className="warm-gradient-bg rounded-[20px] p-6 border border-[#e8d2c0] flex flex-col min-h-[450px]">
+                <div className="editor-glass-card rounded-2xl p-5 flex-1 flex flex-col space-y-4">
+                  <div className="flex items-center justify-between border-b border-white/40 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#d88a5c]" />
+                      <span className="font-mono text-xs font-bold text-[#7b4c2d] uppercase tracking-wider">config.json</span>
                     </div>
-
-                    <textarea
-                      className="frixion-textarea flex-1 p-4 font-mono text-xs w-full bg-white/70 backdrop-blur min-h-[280px]"
-                      value={configText}
-                      onChange={(e) => setConfigText(e.target.value)}
-                    />
-                    
-                    {configErr && (
-                      <div className="text-[11px] text-[#b52d2d] font-semibold bg-red-50/70 p-2.5 rounded-lg border border-red-150">
-                        <strong>Error:</strong> {configErr}
-                      </div>
+                    {configErr ? (
+                      <span className="badge badge-red text-[10px]">✗ ERROR</span>
+                    ) : (
+                      <span className="badge badge-green text-[10px]">✓ COMPILED</span>
                     )}
-                    
-                    <div className="flex gap-3 pt-2">
-                      <button
-                        onClick={() => setView("table")}
-                        className="frixion-btn-secondary text-xs px-4 py-2"
-                      >
-                        Cancel
-                      </button>
+                  </div>
+
+                  <textarea
+                    className="frixion-textarea flex-1 p-4 font-mono text-xs w-full bg-white/70 backdrop-blur min-h-[280px]"
+                    value={configText}
+                    onChange={(e) => setConfigText(e.target.value)}
+                  />
+                  
+                  {configErr && (
+                    <div className="text-[11px] text-[#b52d2d] font-semibold bg-red-50/70 p-2.5 rounded-lg border border-red-150">
+                      <strong>Error:</strong> {configErr}
                     </div>
+                  )}
+                  
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => setView("table")}
+                      className="frixion-btn-secondary text-xs px-4 py-2"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </div>
+              </div>
 
-                {/* Right Pane: Live Compilations & Versions */}
-                <div className="space-y-6 flex flex-col">
-                  {/* Fields list */}
-                  <div className="card bg-white p-5 border border-slate-200 shadow-sm">
-                    <span className="field-label mb-3">COMPILED SCHEMAS</span>
-                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                      {app.config.fields.map((f) => (
+              {/* Right Pane: Info & Versions */}
+              <div className="space-y-6 flex flex-col">
+                <div className="card bg-white p-5 border border-slate-200 shadow-sm">
+                  <span className="field-label mb-3">COMPILED SCHEMAS</span>
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                    {app.config.fields.map((f) => {
+                      const isUnknown = !["string", "number", "boolean", "enum", "date"].includes(f.type);
+                      return (
                         <div
                           key={f.name}
                           className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex items-center justify-between hover:bg-slate-100 transition"
@@ -1148,173 +1183,214 @@ body {
                             {f.required && (
                               <span className="badge badge-red text-[9px] py-0 px-1">req</span>
                             )}
-                            <span className={`badge ${TYPE_COLORS[f.type]}`}>
-                              {f.type}
+                            <span className={`badge ${TYPE_COLORS[f.type] || "badge-purple"}`}>
+                              {isUnknown ? `⚠️ ${f.type}` : f.type}
                             </span>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Versions history list */}
-                  <div className="card bg-white p-5 border border-slate-200 shadow-sm flex-1">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="field-label">VERSION HISTORY LOGS</span>
-                      <span className="badge badge-purple">{app.versions.length} versions</span>
-                    </div>
-                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                      {app.versions.map((v) => (
-                        <button
-                          key={v.id}
-                          onClick={() => setSelectedHistoryVersion(v)}
-                          className="w-full flex items-center justify-between p-2.5 rounded-xl border bg-slate-50 hover:bg-slate-100 transition cursor-pointer text-left"
-                        >
-                          <span className="text-xs font-black text-slate-800">
-                            Version #{v.version}
-                          </span>
-                          <span className="text-[10px] font-semibold text-slate-400">
-                            {new Date(v.createdAt).toLocaleDateString()}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-              </div>
-              </div>
-            </div>
-          )}
-
-          {view === "github" && (
-            <div className="animate-fade-in">
-              <div className="page-header">
-                <div>
-                  <h1 className="font-serif text-2xl font-normal italic text-slate-800">GitHub Exporter</h1>
-                  <p className="text-xs font-medium text-slate-400 mt-0.5">Export your schema & records as a standalone Next.js repo</p>
-                </div>
-              </div>
-              <div className="page-content">
-
-              <div className="grid gap-6 md:grid-cols-3">
-                <div className="md:col-span-2 card p-6 bg-white border border-slate-200 shadow-sm space-y-4">
-                  <div>
-                    <label className="field-label">GitHub Personal Access Token (PAT) *</label>
-                    <input
-                      type="password"
-                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxx"
-                      value={githubToken}
-                      onChange={(e) => setGithubToken(e.target.value)}
-                      className="input font-mono text-xs"
-                    />
-                    <p className="text-[10px] font-medium text-slate-400 mt-1">
-                      Create a PAT on GitHub under Developer Settings with `repo` scopes. We run this request completely inside your browser (zero tokens are sent to our servers).
-                    </p>
+                <div className="card bg-white p-5 border border-slate-200 shadow-sm flex-1">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="field-label">VERSION HISTORY LOGS</span>
+                    <span className="badge badge-purple">{app.versions.length} versions</span>
                   </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="field-label">Target Repo Name *</label>
-                      <input
-                        type="text"
-                        placeholder="my-entity-database-app"
-                        value={githubRepoName}
-                        onChange={(e) => setGithubRepoName(e.target.value)}
-                        className="input"
-                      />
-                    </div>
-                    <div>
-                      <label className="field-label">Privacy level</label>
-                      <div className="flex items-center gap-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setGithubPrivate(!githubPrivate)}
-                          className="w-11 h-6 rounded-full transition-colors relative cursor-pointer outline-none"
-                          style={{
-                            background: githubPrivate ? "var(--accent)" : "var(--border-bright)",
-                          }}
-                        >
-                          <div
-                            className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
-                            style={{
-                              left: "2px",
-                              transform: githubPrivate ? "translateX(20px)" : "translateX(0)",
-                            }}
-                          />
-                        </button>
-                        <span className="text-xs font-bold text-slate-600">
-                          {githubPrivate ? "Private Repository" : "Public Repository"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleGitHubExport}
-                    disabled={exporting || !githubToken}
-                    className="btn-primary glow-btn-primary py-3 px-5 text-xs font-bold w-full gap-2 mt-2"
-                  >
-                    {exporting && (
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    )}
-                    {exporting ? "Building & Pushing App Code..." : "Export App Workspace Code to GitHub"}
-                  </button>
-
-                  {exportedUrl && (
-                    <div className="p-4 rounded-xl border border-green-200 bg-green-50/50 flex flex-col gap-2">
-                      <div className="text-xs font-black text-green-700">✓ Export successful! Your Next.js app repo is active:</div>
-                      <a href={exportedUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline font-mono">
-                        {exportedUrl}
-                      </a>
-                      <a
-                        href={`https://vercel.com/new/clone?repository-url=${encodeURIComponent(exportedUrl)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-2 text-xs font-bold text-white shadow hover:opacity-90"
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                    {app.versions.map((v) => (
+                      <button
+                        key={v.id}
+                        onClick={() => setSelectedHistoryVersion(v)}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl border bg-slate-50 hover:bg-slate-100 transition cursor-pointer text-left border-solid border-slate-200"
                       >
-                        Deploy to Vercel in 1-Click
-                      </a>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-slate-50 border p-4 rounded-xl flex flex-col justify-between">
-                  <div>
-                    <span className="field-label mb-2">EXPORT CONSOLE LOGS</span>
-                    <pre className="bg-slate-900 text-[10px] text-green-400 font-mono p-3 rounded-lg h-72 overflow-y-auto space-y-1">
-                      {exportLogs.map((log, i) => (
-                        <div key={i} className="whitespace-pre-wrap">{`> ${log}`}</div>
-                      ))}
-                      {exportLogs.length === 0 && (
-                        <div className="text-slate-500 italic">Logs will display here during build export.</div>
-                      )}
-                    </pre>
-                  </div>
-                  <div className="text-[10px] font-semibold text-slate-400 mt-2 bg-white border p-2.5 rounded-lg leading-relaxed">
-                    <strong>Generated structures include:</strong> `page.tsx`, `package.json`, tailwind config, seed data list, and local storage state sync code.
+                        <span className="text-xs font-black text-slate-800">
+                          Version #{v.version}
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-450">
+                          {new Date(v.createdAt).toLocaleDateString()}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
+
+            </div>
+          </div>
+        )}
+
+        {view === "github" && (
+          <div className="animate-fade-in space-y-6">
+            <div>
+              <h1 className="font-serif text-3xl font-normal italic text-slate-800">GitHub Exporter</h1>
+              <p className="text-xs font-medium text-slate-400 mt-1">Export runtime database and code directly to a standalone Next.js repo</p>
+            </div>
+            
+            <div className="grid gap-6 md:grid-cols-3">
+              <div className="md:col-span-2 card p-6 bg-white border border-slate-200 shadow-sm space-y-4">
+                <div>
+                  <label className="field-label">GitHub Personal Access Token (PAT) *</label>
+                  <input
+                    type="password"
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxx"
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    className="input font-mono text-xs"
+                  />
+                  <p className="text-[10px] font-medium text-slate-400 mt-1 leading-relaxed">
+                    Generate a PAT on GitHub (classic or fine-grained) with `repo` scopes. Operations run completely in-browser. AppForge stores no keys on its server.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="field-label">Target Repo Name *</label>
+                    <input
+                      type="text"
+                      placeholder="my-entity-database-app"
+                      value={githubRepoName}
+                      onChange={(e) => setGithubRepoName(e.target.value)}
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">Privacy level</label>
+                    <div className="flex items-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setGithubPrivate(!githubPrivate)}
+                        className="w-11 h-6 rounded-full transition-colors relative cursor-pointer outline-none border-none"
+                        style={{
+                          background: githubPrivate ? "var(--accent)" : "rgba(0,0,0,0.12)",
+                        }}
+                      >
+                        <div
+                          className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+                          style={{
+                            left: "2px",
+                            transform: githubPrivate ? "translateX(20px)" : "translateX(0)",
+                          }}
+                        />
+                      </button>
+                      <span className="text-xs font-bold text-slate-600">
+                        {githubPrivate ? "Private Repository" : "Public Repository"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleGitHubExport}
+                  disabled={exporting || !githubToken}
+                  className="btn-primary glow-btn-primary py-3 px-5 text-xs font-bold w-full gap-2 mt-2"
+                >
+                  {exporting && (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  )}
+                  {exporting ? "Building & Pushing App Code..." : "Export App Workspace Code to GitHub"}
+                </button>
+
+                {exportedUrl && (
+                  <div className="p-4 rounded-xl border border-green-200 bg-green-50/50 flex flex-col gap-2">
+                    <div className="text-xs font-black text-green-700">✓ Export successful! Your Next.js app repo is active:</div>
+                    <a href={exportedUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline font-mono text-decoration-none">
+                      {exportedUrl}
+                    </a>
+                    <a
+                      href={`https://vercel.com/new/clone?repository-url=${encodeURIComponent(exportedUrl)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-2 text-xs font-bold text-white shadow hover:opacity-90 text-decoration-none"
+                    >
+                      Deploy to Vercel in 1-Click
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-slate-50 border p-4 rounded-xl flex flex-col justify-between">
+                <div>
+                  <span className="field-label mb-2">EXPORT CONSOLE LOGS</span>
+                  <pre className="bg-slate-900 text-[10px] text-green-400 font-mono p-3 rounded-lg h-72 overflow-y-auto space-y-1">
+                    {exportLogs.map((log, i) => (
+                      <div key={i} className="whitespace-pre-wrap">{`> ${log}`}</div>
+                    ))}
+                    {exportLogs.length === 0 && (
+                      <div className="text-slate-500 italic">Logs will display here during build export.</div>
+                    )}
+                  </pre>
+                </div>
+                <div className="text-[10px] font-semibold text-slate-400 mt-2 bg-white border p-2.5 rounded-lg leading-relaxed">
+                  <strong>Statically generated stack:</strong> includes client side database syncing, forms, data grids, Tailwind CSS configs, and layout templates.
+                </div>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </main>
 
-      {/* Version Comparison Modal — fixed overlay inside sidebar-shell */}
+      {/* ─── PWA "DEPLOY TO PHONE" INSTALL QR OVERLAY MODAL ────────────────────── */}
+      {showPwaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
+          <div className="card w-full max-w-md animate-fade-up overflow-hidden bg-white shadow-2xl p-6 relative">
+            <button
+              onClick={() => setShowPwaModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-650 font-bold border-none bg-transparent cursor-pointer text-sm"
+            >
+              ✕
+            </button>
+            <div className="text-center">
+              <span className="badge badge-purple px-3 py-1 mb-2">Installable Mobile App</span>
+              <h3 className="font-serif text-2xl italic font-normal text-slate-800 m-0">Add to Phone Home Screen</h3>
+              <p className="text-xs text-slate-400 mt-1 mb-6">Scan code below with your phone camera to download this custom AppForge runtime</p>
+              
+              <div className="w-[180px] h-[180px] bg-slate-50 border border-slate-200 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-inner">
+                {/* QR code generator using public API */}
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(appUrl)}`}
+                  alt="AppForge PWA Deployment Code"
+                  width={160}
+                  height={160}
+                  className="rounded-lg shadow-sm"
+                />
+              </div>
+
+              <div className="text-left bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-100">
+                <p className="text-[11px] font-black text-slate-700 m-0">How to install:</p>
+                <ol className="text-[11px] text-slate-500 font-semibold m-0 pl-4 space-y-1">
+                  <li>Scan the QR code to open the app page on your phone browser.</li>
+                  <li>In Safari (iOS), tap the <strong>Share</strong> button and choose <strong>Add to Home Screen</strong>.</li>
+                  <li>In Chrome (Android), tap the menu icon (3 dots) and select <strong>Add to Home Screen</strong> or <strong>Install App</strong>.</li>
+                </ol>
+              </div>
+
+              <button
+                onClick={() => setShowPwaModal(false)}
+                className="btn-ghost text-xs w-full py-2.5 rounded-xl font-bold mt-4"
+              >
+                Close Portal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Version Comparison Modal */}
       {selectedHistoryVersion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm font-sans">
           <div className="card w-full max-w-3xl animate-fade-up overflow-hidden bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#edf0f4] p-6 bg-slate-50">
               <div>
                 <h1 className="font-serif text-2xl font-normal tracking-tight text-[#07090f] italic">Compare Config Version #{selectedHistoryVersion.version}</h1>
-                <p className="text-xs font-medium text-[#6d7484]">
+                <p className="text-xs font-medium text-[#6d7484] mt-0.5">
                   Compare schema definition saved on {new Date(selectedHistoryVersion.createdAt).toLocaleString()}.
                 </p>
               </div>
               <button
                 onClick={() => setSelectedHistoryVersion(null)}
-                className="btn-ghost h-8 w-8 p-0 grid place-items-center font-black rounded-full"
+                className="btn-ghost h-8 w-8 p-0 grid place-items-center font-black rounded-full border-none bg-transparent cursor-pointer"
               >
                 ✕
               </button>
@@ -1323,7 +1399,7 @@ body {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 overflow-y-auto max-h-[60vh]">
               <div>
                 <span className="field-label mb-2">CURRENT SCHEMAS CONFIG</span>
-                <pre className="json-output h-80 text-[11px] overflow-auto text-slate-300 bg-slate-900 p-3 rounded-lg border border-slate-800">
+                <pre className="json-output h-80 text-[11px] overflow-auto text-slate-350 bg-slate-900 p-3 rounded-lg border border-slate-800">
                   {configText}
                 </pre>
               </div>
@@ -1349,6 +1425,7 @@ body {
           </div>
         </div>
       )}
-      </div>
+
+    </div>
   );
 }
