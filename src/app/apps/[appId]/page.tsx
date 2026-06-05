@@ -6,14 +6,18 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import type { AppConfig, FieldConfig } from "@/types/config";
 
-interface ConfigVersion {
+import { ConfigEditorView } from "./components/ConfigEditorView";
+import { HistoryView } from "./components/HistoryView";
+import { GitHubExportView } from "./components/GitHubExportView";
+
+export interface ConfigVersion {
   id: string;
   version: number;
   config: AppConfig;
   createdAt: string;
 }
 
-interface AppData {
+export interface AppData {
   id: string;
   name: string;
   description: string | null;
@@ -53,7 +57,7 @@ const TYPE_ICONS: Record<string, string> = {
   date: "📅",
 };
 
-type WorkspaceView = "table" | "new" | "edit" | "config" | "history" | "github";
+export type WorkspaceView = "table" | "new" | "edit" | "config" | "history" | "github";
 
 type FieldDiff = {
   key: string;
@@ -1315,279 +1319,39 @@ body {
         )}
 
         {view === "config" && (
-          <div className="animate-fade-in space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="font-serif text-3xl font-normal italic text-slate-800">Schema Config Editor</h1>
-                <p className="text-xs font-medium text-slate-400 mt-1">Updates save configuration version history automatically</p>
-              </div>
-              <button
-                onClick={() => handleConfigSave()}
-                disabled={updating}
-                className="frixion-btn px-6 py-2.5 text-xs font-bold gap-2"
-              >
-                {updating && (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                )}
-                {updating ? "Saving..." : "⚡ Save Config & Compile"}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              {/* Left Pane: Editor */}
-              <div className="warm-gradient-bg rounded-[20px] p-6 border border-[#e8d2c0] flex flex-col min-h-[450px]">
-                <div className="editor-glass-card rounded-2xl p-5 flex-1 flex flex-col space-y-4">
-                  <div className="flex items-center justify-between border-b border-white/40 pb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#d88a5c]" />
-                      <span className="font-mono text-xs font-bold text-[#7b4c2d] uppercase tracking-wider">config.json</span>
-                    </div>
-                    {configErr ? (
-                      <span className="badge badge-red text-[10px]">✗ ERROR</span>
-                    ) : (
-                      <span className="badge badge-green text-[10px]">✓ COMPILED</span>
-                    )}
-                  </div>
-
-                  <textarea
-                    className="frixion-textarea flex-1 p-4 font-mono text-xs w-full bg-white/70 backdrop-blur min-h-[280px]"
-                    value={configText}
-                    onChange={(e) => setConfigText(e.target.value)}
-                  />
-                  
-                  {configErr && (
-                    <div className="text-[11px] text-[#b52d2d] font-semibold bg-red-50/70 p-2.5 rounded-lg border border-red-150">
-                      <strong>Error:</strong> {configErr}
-                    </div>
-                  )}
-                  
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      onClick={() => setView("table")}
-                      className="frixion-btn-secondary text-xs px-4 py-2"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Pane: Info & Versions */}
-              <div className="space-y-6 flex flex-col">
-                <div className="card bg-white p-5 border border-slate-200 shadow-sm">
-                  <span className="field-label mb-3">COMPILED SCHEMAS</span>
-                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                    {app.config.fields.map((f) => {
-                      const isUnknown = !["string", "number", "boolean", "enum", "date"].includes(f.type);
-                      return (
-                        <div
-                          key={f.name}
-                          className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex items-center justify-between hover:bg-slate-100 transition"
-                        >
-                          <span className="text-xs font-bold text-slate-700">{f.name}</span>
-                          <div className="flex gap-1 items-center">
-                            {f.required && (
-                              <span className="badge badge-red text-[9px] py-0 px-1">req</span>
-                            )}
-                            <span className={`badge ${TYPE_COLORS[f.type] || "badge-purple"}`}>
-                              {isUnknown ? `⚠️ ${f.type}` : f.type}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="card bg-white p-5 border border-slate-200 shadow-sm flex-1">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="field-label">VERSION HISTORY LOGS</span>
-                    <span className="badge badge-purple">{app.versions.length} versions</span>
-                  </div>
-                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                    {app.versions.map((v) => (
-                      <button
-                        key={v.id}
-                        onClick={() => setSelectedHistoryVersion(v)}
-                        className="w-full flex items-center justify-between p-2.5 rounded-xl border bg-slate-50 hover:bg-slate-100 transition cursor-pointer text-left border-solid border-slate-200"
-                      >
-                        <span className="text-xs font-black text-slate-800">
-                          Version #{v.version}
-                        </span>
-                        <span className="text-[10px] font-semibold text-slate-450">
-                          {new Date(v.createdAt).toLocaleDateString()}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
+          <ConfigEditorView
+            app={app}
+            configText={configText}
+            setConfigText={setConfigText}
+            configErr={configErr}
+            updating={updating}
+            handleConfigSave={handleConfigSave}
+            setView={setView}
+            setSelectedHistoryVersion={setSelectedHistoryVersion}
+          />
         )}
 
         {view === "history" && (
-          <div className="animate-fade-in space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="font-serif text-3xl font-normal italic text-slate-800">Config history</h1>
-                <p className="text-xs font-medium text-slate-400 mt-1">Previous schema configs with saved timestamps</p>
-              </div>
-              <button onClick={() => setView("config")} className="btn-ghost text-xs font-bold">
-                Open Config Editor
-              </button>
-            </div>
-
-            {app.versions.length === 0 ? (
-              <div className="text-center py-16 bg-white/70 backdrop-blur border border-slate-200 rounded-2xl">
-                <h3 className="text-base font-extrabold text-slate-700">No config versions yet</h3>
-                <p className="text-xs font-semibold text-slate-400 mt-1">
-                  Save a schema change and the previous config will appear here with its timestamp.
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {app.versions.map((version) => (
-                  <button
-                    key={version.id}
-                    onClick={() => setSelectedHistoryVersion(version)}
-                    className="card w-full bg-white p-5 text-left border border-slate-200 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/20"
-                  >
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="badge badge-purple">Version #{version.version}</span>
-                          <span className="text-[11px] font-bold text-slate-400">
-                            {new Date(version.createdAt).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="mt-3 text-sm font-black text-slate-800">
-                          {(version.config as AppConfig).entity || "Untitled entity"}
-                        </div>
-                        <div className="mt-1 text-xs font-semibold text-slate-400">
-                          {((version.config as AppConfig).fields || []).length} fields captured in this config
-                        </div>
-                      </div>
-                      <pre className="json-output max-h-36 w-full overflow-auto text-[10px] md:max-w-xl">
-                        {JSON.stringify(version.config, null, 2)}
-                      </pre>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <HistoryView
+            app={app}
+            setView={setView}
+            setSelectedHistoryVersion={setSelectedHistoryVersion}
+          />
         )}
 
         {view === "github" && (
-          <div className="animate-fade-in space-y-6">
-            <div>
-              <h1 className="font-serif text-3xl font-normal italic text-slate-800">GitHub Exporter</h1>
-              <p className="text-xs font-medium text-slate-400 mt-1">Export runtime database and code directly to a standalone Next.js repo</p>
-            </div>
-            
-            <div className="grid gap-6 md:grid-cols-3">
-              <div className="md:col-span-2 card p-6 bg-white border border-slate-200 shadow-sm space-y-4">
-                <div>
-                  <label className="field-label">GitHub Personal Access Token (PAT) *</label>
-                  <input
-                    type="password"
-                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxx"
-                    value={githubToken}
-                    onChange={(e) => setGithubToken(e.target.value)}
-                    className="input font-mono text-xs"
-                  />
-                  <p className="text-[10px] font-medium text-slate-400 mt-1 leading-relaxed">
-                    Generate a PAT on GitHub (classic or fine-grained) with `repo` scopes. The token is sent only for this export request and is not stored.
-                  </p>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="field-label">Target Repo Name *</label>
-                    <input
-                      type="text"
-                      placeholder="my-entity-database-app"
-                      value={githubRepoName}
-                      onChange={(e) => setGithubRepoName(e.target.value)}
-                      className="input"
-                    />
-                  </div>
-                  <div>
-                    <label className="field-label">Privacy level</label>
-                    <div className="flex items-center gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setGithubPrivate(!githubPrivate)}
-                        className="w-11 h-6 rounded-full transition-colors relative cursor-pointer outline-none border-none"
-                        style={{
-                          background: githubPrivate ? "var(--accent)" : "rgba(0,0,0,0.12)",
-                        }}
-                      >
-                        <div
-                          className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
-                          style={{
-                            left: "2px",
-                            transform: githubPrivate ? "translateX(20px)" : "translateX(0)",
-                          }}
-                        />
-                      </button>
-                      <span className="text-xs font-bold text-slate-600">
-                        {githubPrivate ? "Private Repository" : "Public Repository"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleGitHubExport}
-                  disabled={exporting || !githubToken}
-                  className="btn-primary glow-btn-primary py-3 px-5 text-xs font-bold w-full gap-2 mt-2"
-                >
-                  {exporting && (
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  )}
-                  {exporting ? "Building & Pushing App Code..." : "Export App Workspace Code to GitHub"}
-                </button>
-
-                {exportedUrl && (
-                  <div className="p-4 rounded-xl border border-green-200 bg-green-50/50 flex flex-col gap-2">
-                    <div className="text-xs font-black text-green-700">✓ Export successful! Your Next.js app repo is active:</div>
-                    <a href={exportedUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline font-mono text-decoration-none">
-                      {exportedUrl}
-                    </a>
-                    <a
-                      href={`https://vercel.com/new/clone?repository-url=${encodeURIComponent(exportedUrl)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-2 text-xs font-bold text-white shadow hover:opacity-90 text-decoration-none"
-                    >
-                      Deploy to Vercel in 1-Click
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-slate-50 border p-4 rounded-xl flex flex-col justify-between">
-                <div>
-                  <span className="field-label mb-2">EXPORT CONSOLE LOGS</span>
-                  <pre className="bg-slate-900 text-[10px] text-green-400 font-mono p-3 rounded-lg h-72 overflow-y-auto space-y-1">
-                    {exportLogs.map((log, i) => (
-                      <div key={i} className="whitespace-pre-wrap">{`> ${log}`}</div>
-                    ))}
-                    {exportLogs.length === 0 && (
-                      <div className="text-slate-500 italic">Logs will display here during build export.</div>
-                    )}
-                  </pre>
-                </div>
-                <div className="text-[10px] font-semibold text-slate-400 mt-2 bg-white border p-2.5 rounded-lg leading-relaxed">
-                  <strong>Generated stack:</strong> Next.js app files, schema JSON, seed data, local CRUD runtime, responsive data grid, and deploy-ready project config.
-                </div>
-              </div>
-            </div>
-          </div>
+          <GitHubExportView
+            githubToken={githubToken}
+            setGithubToken={setGithubToken}
+            githubRepoName={githubRepoName}
+            setGithubRepoName={setGithubRepoName}
+            githubPrivate={githubPrivate}
+            setGithubPrivate={setGithubPrivate}
+            handleGitHubExport={handleGitHubExport}
+            exporting={exporting}
+            exportedUrl={exportedUrl}
+            exportLogs={exportLogs}
+          />
         )}
       </main>
 

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import type { ApiResponse } from "@/types/config";
+import { validateConfig } from "@/engine/validator";
+import type { ApiResponse, AppConfig } from "@/types/config";
+import { Prisma } from "@prisma/client";
 
 type Params = {
   params: Promise<{ appId: string; entity: string; recordId: string }>;
@@ -43,14 +45,37 @@ export async function PUT(request: NextRequest, { params }: Params) {
       );
     }
 
+    const validation = validateConfig(app.config);
+    const config: AppConfig = validation.config;
+
+    const existingData = (record.data as Record<string, unknown>) || {};
+    const mergedData = { ...existingData, ...body };
+    const sanitizedData: Record<string, Prisma.InputJsonValue> = {};
+
+    for (const field of config.fields) {
+      const value = mergedData[field.name];
+      if (
+        field.required &&
+        (value === undefined || value === null || value === "")
+      ) {
+        return NextResponse.json<ApiResponse>(
+          { success: false, error: `Field "${field.name}" is required` },
+          { status: 400 },
+        );
+      }
+      sanitizedData[field.name] = (value ??
+        field.defaultValue ??
+        null) as Prisma.InputJsonValue;
+    }
+
     const updated = await prisma.appRecord.update({
       where: { id: recordId },
-      data: { data: { ...(record.data as object), ...body } },
+      data: { data: sanitizedData as Prisma.InputJsonObject },
     });
 
     return NextResponse.json<ApiResponse>({
       success: true,
-      data: { id: updated.id, ...(updated.data as object) },
+      data: { id: updated.id, ...(updated.data as Prisma.JsonObject) },
     });
   } catch (error) {
     console.error("PUT record error:", error);
