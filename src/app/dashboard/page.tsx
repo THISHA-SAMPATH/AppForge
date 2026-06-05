@@ -441,23 +441,20 @@ export default function DashboardPage() {
             <span className="font-black tracking-tight text-sm sm:text-base">AppForge</span>
           </Link>
           <nav className="flex items-center gap-4 text-xs font-bold text-[#555d70] sm:gap-7">
+            <Link href="/playground" className="spark-nav-tab py-1 cursor-pointer">
+              🧪 Playground
+            </Link>
+            <Link href="/import" className="spark-nav-tab py-1 cursor-pointer">
+              📊 Import CSV
+            </Link>
             <button
-              onClick={() => setActiveTab("apps")}
-              className={`spark-nav-tab py-1 cursor-pointer ${activeTab === "apps" ? "active" : ""}`}
+              onClick={() => {
+                setForm({ name: "", description: "", config: "" });
+                setShowModal(true);
+              }}
+              className="btn-primary py-1.5 px-3 text-xs font-bold gap-1 cursor-pointer"
             >
-              Apps
-            </button>
-            <button
-              onClick={() => setActiveTab("playground")}
-              className={`spark-nav-tab py-1 cursor-pointer ${activeTab === "playground" ? "active" : ""}`}
-            >
-              Validator Playground
-            </button>
-            <button
-              onClick={() => setActiveTab("csv")}
-              className={`spark-nav-tab py-1 cursor-pointer ${activeTab === "csv" ? "active" : ""}`}
-            >
-              CSV Reverse Engineer
+              <span>+</span> New App
             </button>
           </nav>
           <div className="flex items-center gap-3">
