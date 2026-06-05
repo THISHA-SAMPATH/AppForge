@@ -95,6 +95,64 @@ function parseDescriptionToConfig(desc: string): AppConfig {
   return { entity, fields, ui: { layout: "table" } };
 }
 
+const getAppTheme = (name: string, entity: string) => {
+  const n = name.toLowerCase();
+  const e = entity.toLowerCase();
+  if (n.includes("task") || e.includes("task") || n.includes("todo") || e.includes("todo")) {
+    return {
+      bg: "bg-[#fff7ed] text-[#ea580c] border-[#ffedd5]",
+      iconBg: "bg-[#ffedd5] text-[#d97706]",
+      color: "#d97706",
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+      )
+    };
+  }
+  if (n.includes("contact") || e.includes("contact") || n.includes("customer") || e.includes("customer") || n.includes("user") || e.includes("user")) {
+    return {
+      bg: "bg-[#fdf2f8] text-[#db2777] border-[#fce7f3]",
+      iconBg: "bg-[#fce7f3] text-[#db2777]",
+      color: "#db2777",
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      )
+    };
+  }
+  return {
+    bg: "bg-[#faf5ff] text-[#7c6ef5] border-[#f3e8ff]",
+    iconBg: "bg-[#f3e8ff] text-[#7c6ef5]",
+    color: "#7c6ef5",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+      </svg>
+    )
+  };
+};
+
+const getRelativeTime = (dateStr: string) => {
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Updated just now";
+    if (diffMins < 60) return `Updated ${diffMins} min${diffMins > 1 ? "s" : ""} ago`;
+    if (diffHours < 24) return `Updated ${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    if (diffDays < 7) return `Updated ${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+    return `Updated on ${date.toLocaleDateString()}`;
+  } catch {
+    return "Updated recently";
+  }
+};
+
 export default function DashboardPage() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -191,65 +249,102 @@ export default function DashboardPage() {
   const initials = session?.user?.name?.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "AF";
 
   return (
-    <div className="forge-canvas flex flex-col justify-between p-6">
+    <div className="forge-canvas flex flex-col justify-between p-6 relative overflow-hidden">
       
+      {/* ─── BACKGROUND ABSTRACT WAVES (HORIZONTAL FLOW) ───────────────────────── */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <svg className="absolute w-full h-full min-w-[1400px] opacity-75" viewBox="0 0 1440 800" fill="none" preserveAspectRatio="none">
+          {/* Glowing Wave Ribbon 1 (Warm Peach/Orange) */}
+          <path d="M -100 360 C 250 480, 450 200, 750 380 C 1050 560, 1250 280, 1600 400" fill="none" stroke="url(#flow-gradient-orange)" strokeWidth="90" strokeLinecap="round" opacity="0.45" filter="url(#glow-blur)" />
+          {/* Glowing Wave Ribbon 2 (Soft Purple/Lavender) */}
+          <path d="M -100 430 C 200 280, 400 540, 800 320 C 1150 100, 1300 440, 1600 320" fill="none" stroke="url(#flow-gradient-purple)" strokeWidth="110" strokeLinecap="round" opacity="0.35" filter="url(#glow-blur)" />
+          {/* Glowing Wave Ribbon 3 (Warm Golden Sunset) */}
+          <path d="M -100 280 C 320 520, 520 180, 920 440 C 1220 580, 1350 280, 1600 220" fill="none" stroke="url(#flow-gradient-gold)" strokeWidth="60" strokeLinecap="round" opacity="0.25" filter="url(#glow-blur)" />
+          
+          <defs>
+            {/* Gaussian Blur Filter for premium light leak / ribbon glow effect */}
+            <filter id="glow-blur" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="35" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            
+            <linearGradient id="flow-gradient-orange" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#fff2e5" />
+              <stop offset="35%" stopColor="#f58046" stopOpacity="0.8" />
+              <stop offset="70%" stopColor="#e26e38" stopOpacity="0.75" />
+              <stop offset="100%" stopColor="#fedfc9" stopOpacity="0.5" />
+            </linearGradient>
+            <linearGradient id="flow-gradient-purple" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#eedeff" />
+              <stop offset="40%" stopColor="#c084fc" stopOpacity="0.8" />
+              <stop offset="75%" stopColor="#a78bfa" stopOpacity="0.75" />
+              <stop offset="100%" stopColor="#ebd8ff" stopOpacity="0.5" />
+            </linearGradient>
+            <linearGradient id="flow-gradient-gold" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#faf0e0" />
+              <stop offset="50%" stopColor="#f59e0b" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="#fffdfa" stopOpacity="0.2" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+
       {/* ─── FLOATING TOP NAV ────────────────────────────────────────────────────── */}
-      <header className="forge-topnav">
+      <header className="forge-topnav border-none shadow-[0_8px_30px_rgba(0,0,0,0.015)] bg-white/45 z-40">
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="flex items-center gap-2 text-decoration-none">
-            <img src="/logo.png" className="w-8 h-8 object-contain rounded-lg" alt="AppForge" />
-            <span className="font-extrabold tracking-tight text-sm text-slate-800">AppForge</span>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#7c6ef5] to-[#9a8eff] flex items-center justify-center font-black text-white text-[11px] shadow-sm tracking-tighter">
+              AF
+            </div>
+            <span className="font-extrabold tracking-tight text-sm text-slate-850">AppForge</span>
           </Link>
         </div>
 
         {/* Center links */}
-        <div className="hidden sm:flex items-center gap-6">
-          <Link href="/playground" className="text-xs font-bold text-slate-650 hover:text-indigo-600 transition text-decoration-none">
+        <div className="hidden sm:flex items-center gap-7">
+          <Link href="/playground" className="text-xs font-bold text-slate-600 hover:text-[#7c6ef5] transition text-decoration-none">
             Playground
           </Link>
-          <Link href="/import" className="text-xs font-bold text-slate-650 hover:text-indigo-600 transition text-decoration-none">
+          <Link href="/import" className="text-xs font-bold text-slate-600 hover:text-[#7c6ef5] transition text-decoration-none">
             Import CSV
-          </Link>
-          <Link href="/settings" className="text-xs font-bold text-slate-650 hover:text-indigo-600 transition text-decoration-none">
-            Settings
           </Link>
           <button 
             onClick={() => setShowCmdPalette(true)}
-            className="text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1 rounded-lg transition border-none cursor-pointer flex items-center gap-1.5"
+            className="text-xs font-semibold text-slate-400 bg-white/30 hover:bg-white/70 px-3.5 py-1.5 rounded-full transition border border-slate-200/40 cursor-pointer flex items-center gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
           >
             <span>Search</span>
-            <kbd className="bg-white px-1 py-0.5 rounded text-[9px] border border-slate-200 font-mono">Ctrl+K</kbd>
+            <span className="text-[10px] text-slate-350 font-mono scale-90">Ctrl + K</span>
           </button>
         </div>
 
         {/* User initials / Signout */}
-        <div className="relative" ref={profileMenuRef}>
+        <div className="relative font-sans" ref={profileMenuRef}>
           <button
             onClick={() => setShowProfileDropdown((prev) => !prev)}
-            className="w-8 h-8 rounded-full bg-amber-400 font-extrabold text-xs text-slate-900 border-none cursor-pointer flex items-center justify-center hover:scale-105 transition"
+            className="w-8 h-8 rounded-full bg-[#f5a100] font-black text-xs text-white border-none cursor-pointer flex items-center justify-center hover:scale-105 transition shadow-sm"
           >
             {initials}
           </button>
 
           {showProfileDropdown && (
-            <div className="dropdown-glass-menu" style={{ right: 0, left: "auto" }}>
-              <div className="p-3 border-b border-slate-100 bg-white/20">
+            <div className="dropdown-glass-menu border border-slate-200/80 shadow-[0_20px_40px_rgba(15,23,42,0.08)] bg-white/90" style={{ right: 0, left: "auto" }}>
+              <div className="p-3 border-b border-slate-100 bg-white/30">
                 <p className="text-xs font-black text-slate-800 m-0">{session?.user?.name || "Builder"}</p>
                 <p className="text-[10px] text-slate-500 m-0 mt-0.5">{session?.user?.email || ""}</p>
               </div>
               <div className="p-1.5 flex flex-col">
-                <Link href="/playground" className="text-xs font-bold text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-decoration-none transition">
+                <Link href="/playground" className="text-xs font-bold text-slate-700 hover:bg-slate-50 p-2.5 rounded-xl text-decoration-none transition">
                   Config Playground
                 </Link>
-                <Link href="/import" className="text-xs font-bold text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-decoration-none transition">
+                <Link href="/import" className="text-xs font-bold text-slate-700 hover:bg-slate-50 p-2.5 rounded-xl text-decoration-none transition">
                   Import CSV File
                 </Link>
-                <Link href="/settings" className="text-xs font-bold text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-decoration-none transition">
+                <Link href="/settings" className="text-xs font-bold text-slate-700 hover:bg-slate-50 p-2.5 rounded-xl text-decoration-none transition">
                   Settings
                 </Link>
                 <button
                   onClick={() => signOut({ callbackUrl: "/login" })}
-                  className="text-xs font-bold text-red-650 hover:bg-red-50 p-2 rounded-lg text-left transition border-none bg-transparent cursor-pointer"
+                  className="text-xs font-bold text-red-600 hover:bg-red-50 p-2.5 rounded-xl text-left transition border-none bg-transparent cursor-pointer"
                 >
                   Sign Out
                 </button>
@@ -260,80 +355,163 @@ export default function DashboardPage() {
       </header>
 
       {/* ─── CENTRAL HERO & INPUT ────────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col items-center justify-center max-w-[680px] w-full mx-auto mt-24 animate-fade-up">
+      <main className="flex-1 flex flex-col items-center justify-center w-full max-w-[1400px] mx-auto mt-24 animate-fade-up relative z-10">
         
-        <h1 className="font-serif text-5xl md:text-6xl font-normal italic text-slate-800 text-center tracking-tight leading-tight mb-8">
-          What are we building today?
-        </h1>
+        <div className="relative w-full max-w-[1360px] mx-auto flex flex-col items-center justify-center py-6 min-h-[480px]">
+          
+          <h1 className="font-serif text-[clamp(2.8rem,6.5vw,4.5rem)] font-normal italic text-slate-900 text-center tracking-tight leading-[1.15] mb-2.5 z-20">
+            What are we <span className="text-[#e26e38] font-serif font-normal italic">building</span> today?
+          </h1>
+          <p className="text-xs md:text-sm font-medium text-slate-500 text-center max-w-md mx-auto mb-10 z-20">
+            Describe your idea in natural language and AppForge will build the full application for you.
+          </p>
 
-        {/* Glassmorphic input box */}
-        <div className="glass-prompt-container p-4 flex flex-col gap-3 w-full">
-          <textarea
-            rows={3}
-            className="w-full bg-transparent border-none outline-none resize-none text-[15px] leading-relaxed text-slate-850 placeholder-slate-400 font-sans"
-            placeholder="e.g., I need an inventory system for my bakery with item name, price (number), category (enum), and current stock levels..."
-            value={assistantPrompt}
-            onChange={(e) => setAssistantPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleForgeAssistant();
-              }
-            }}
-          />
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/50 pt-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              {inferredConfig ? (
-                <>
-                  <span className="badge badge-purple text-[9px]">Entity: {inferredConfig.entity}</span>
-                  {inferredConfig.fields.slice(0, 4).map((field) => (
-                    <span
-                      key={field.name}
-                      className={`badge text-[9px] ${field.type === "string" ? "badge-cyan" : field.type === "number" ? "badge-amber" : field.type === "enum" ? "badge-purple" : field.type === "boolean" ? "badge-green" : "badge-red"}`}
-                    >
-                      {field.name}:{field.type}
-                    </span>
-                  ))}
-                  {inferredConfig.fields.length > 4 && (
-                    <span className="text-[10px] font-bold text-slate-400">+{inferredConfig.fields.length - 4} more</span>
-                  )}
-                </>
-              ) : (
-                <span className="text-[10px] font-semibold text-slate-400">Type a workflow and AppForge will infer entity + field types live.</span>
-              )}
+          {/* ─ FLOATING CARDS & CONNECTIONS ──────────────────────────────────────── */}
+          {/* Database Card */}
+          <div className="absolute left-[2%] top-[8%] lg:left-[4%] lg:top-[12%] hidden md:flex flex-col w-[145px] p-3.5 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-1 z-15 text-[10px]">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-amber-500 text-xs">📁</span>
+              <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wide">Database</span>
             </div>
-            <span className={`text-[10px] font-black ${promptChars > promptLimit ? "text-red-500" : "text-slate-400"}`}>
-              {promptChars}/{promptLimit}
-            </span>
+            <div className="space-y-1.5 text-slate-400 font-bold pl-1 font-mono text-[9px] mt-1">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1 h-1 rounded-full bg-slate-350" />
+                <span>id: string</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1 h-1 rounded-full bg-slate-350" />
+                <span>name: string</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1 h-1 rounded-full bg-slate-350" />
+                <span>price: number</span>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center justify-between border-t border-slate-200/50 pt-3">
-            <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-              <span>{forging ? "Forging your app..." : "Press Enter to Forge"}</span>
-            </span>
-            <button
-              onClick={() => handleForgeAssistant()}
-              disabled={forging || !assistantPrompt.trim()}
-              className="frixion-btn px-5 py-2 text-xs font-bold"
-            >
-              {forging ? (
-                <span className="inline-flex items-center gap-2">
-                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Forging...
-                </span>
-              ) : (
-                "Forge App →"
-              )}
-            </button>
+
+          {/* UI Components Card */}
+          <div className="absolute right-[2%] top-[10%] lg:right-[4%] lg:top-[14%] hidden md:flex flex-col w-[145px] p-3.5 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-2 z-15 text-[10px]">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[#7c6ef5] text-xs">㗊</span>
+              <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wide">UI Components</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100/30 rounded-xl mt-1">
+              <div className="h-5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8px] text-slate-400">Box</div>
+              <div className="h-5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8px] text-slate-400">List</div>
+              <div className="h-5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8px] text-slate-400">Card</div>
+              <div className="h-5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8px] text-slate-400">Grid</div>
+            </div>
           </div>
+
+          {/* API Card */}
+          <div className="absolute left-[3%] bottom-[12%] lg:left-[5%] lg:bottom-[16%] hidden md:flex flex-col w-[145px] p-3.5 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-3 z-15 text-[10px]">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-emerald-500 font-mono font-black text-xs">&lt;/&gt;</span>
+              <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wide">API</span>
+            </div>
+            <div className="space-y-1.5 font-mono text-[8.5px] font-bold text-slate-500 mt-1.5">
+              <div className="bg-white/60 px-2 py-1.5 rounded-xl border border-slate-200/40 truncate">GET /api/apps</div>
+              <div className="bg-white/60 px-2 py-1.5 rounded-xl border border-slate-200/40 truncate">POST /api/records</div>
+            </div>
+          </div>
+
+          {/* Dashboard Card */}
+          <div className="absolute right-[3%] bottom-[10%] lg:right-[5%] lg:bottom-[14%] hidden md:flex flex-col w-[145px] p-3.5 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-4 z-15 text-[10px]">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[#e26e38] text-xs">📊</span>
+              <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wide">Dashboard</span>
+            </div>
+            <div className="flex items-end justify-center gap-1.5 h-10 bg-slate-100/30 rounded-xl p-2 mt-1.5">
+              <div className="w-2 h-4 bg-[#f27233]/70 rounded-sm" />
+              <div className="w-2 h-6 bg-[#f27233] rounded-sm" />
+              <div className="w-2 h-8 bg-[#e26e38] rounded-sm" />
+              <div className="w-2 h-5 bg-[#7c6ef5]/80 rounded-sm" />
+              <div className="w-2 h-7 bg-[#7c6ef5] rounded-sm" />
+            </div>
+          </div>
+
+          {/* Connection Lines SVGs */}
+          <svg className="absolute inset-0 w-full h-full pointer-events-none hidden md:block z-0" viewBox="0 0 1360 480" preserveAspectRatio="none">
+            {/* Database to Prompt Box */}
+            <path d="M 190 100 C 280 100, 270 220, 365 220" className="path-connection" fill="none" strokeWidth="1.2" />
+            {/* UI Components to Prompt Box */}
+            <path d="M 1170 110 C 1080 110, 1090 220, 995 220" className="path-connection-alt" fill="none" strokeWidth="1.2" />
+            {/* API to Prompt Box */}
+            <path d="M 200 380 C 290 380, 280 280, 365 280" className="path-connection-alt" fill="none" strokeWidth="1.2" />
+            {/* Dashboard to Prompt Box */}
+            <path d="M 1160 370 C 1070 370, 1080 280, 995 280" className="path-connection" fill="none" strokeWidth="1.2" />
+          </svg>
+
+          {/* Central Glassmorphic input box */}
+          <div className="relative z-20 w-full max-w-[620px] bg-white rounded-3xl border border-[#e2e8f0]/80 shadow-[0_20px_50px_rgba(226,110,56,0.03),_0_1px_2px_rgba(0,0,0,0.015)] p-5.5 flex flex-col gap-3">
+            <textarea
+              rows={3}
+              className="w-full bg-transparent border-none outline-none resize-none text-[14px] leading-relaxed text-slate-800 placeholder-slate-400 font-sans"
+              placeholder="e.g., I need an inventory system for my bakery with item name, price (number), category (enum), and current stock levels..."
+              value={assistantPrompt}
+              onChange={(e) => setAssistantPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleForgeAssistant();
+                }
+              }}
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                {inferredConfig ? (
+                  <>
+                    <span className="badge badge-purple text-[9px] font-bold">Entity: {inferredConfig.entity}</span>
+                    {inferredConfig.fields.slice(0, 3).map((field) => (
+                      <span
+                        key={field.name}
+                        className={`badge text-[9px] font-bold ${field.type === "string" ? "badge-cyan" : field.type === "number" ? "badge-amber" : field.type === "enum" ? "badge-purple" : field.type === "boolean" ? "badge-green" : "badge-red"}`}
+                      >
+                        {field.name}:{field.type}
+                      </span>
+                    ))}
+                    {inferredConfig.fields.length > 3 && (
+                      <span className="text-[10px] font-bold text-slate-400">+{inferredConfig.fields.length - 3} more</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-[10px] font-semibold text-slate-400/90">Type a workflow and AppForge will infer entity + field types live.</span>
+                )}
+              </div>
+              <span className={`text-[10px] font-bold ${promptChars > promptLimit ? "text-red-500" : "text-slate-400"}`}>
+                {promptChars}/{promptLimit}
+              </span>
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+              <span className="text-[10.5px] text-slate-400 font-semibold flex items-center gap-1">
+                <span>{forging ? "Forging your app..." : "Press Enter to Forge"}</span>
+              </span>
+              <button
+                onClick={() => handleForgeAssistant()}
+                disabled={forging || !assistantPrompt.trim()}
+                className="dashboard-gradient-btn px-6 py-2.5 rounded-xl text-xs font-black cursor-pointer border-none"
+              >
+                {forging ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Forging...
+                  </span>
+                ) : (
+                  "Forge App →"
+                )}
+              </button>
+            </div>
+          </div>
+
         </div>
 
         {error && (
-          <p className="text-xs font-semibold text-red-500 mt-3">{error}</p>
+          <p className="text-xs font-semibold text-red-500 mt-2">{error}</p>
         )}
 
         {/* Starter shortcuts */}
-        <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Starters:</span>
+        <div className="relative z-20 flex flex-wrap items-center justify-center gap-3.5 mt-2">
+          <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mr-1">Starters:</span>
           {STARTERS.map((s) => (
             <button
               key={s.label}
@@ -341,58 +519,125 @@ export default function DashboardPage() {
                 notify("success", `Loaded ${s.label} starter.`);
                 router.push(`/apps/new?starter=${encodeURIComponent(s.label)}`);
               }}
-              className="glass-pill px-3 py-1.5 rounded-full text-xs font-semibold text-slate-700 hover:text-indigo-600 transition border-none cursor-pointer flex items-center gap-1.5"
+              className="px-4 py-1.5 rounded-full text-xs font-bold text-slate-700 bg-white/50 hover:bg-white hover:text-[#e26e38] transition border border-[#e2e8f0]/70 hover:border-[#f27233]/30 cursor-pointer flex items-center gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.015)]"
             >
-              <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: s.color }} />
+              <span className="starred-bullet" style={{ background: s.color }} />
               {s.label}
             </button>
           ))}
         </div>
       </main>
 
-      {/* ─── BOTTOM RECENT FORGES CAROUSEL ───────────────────────────────────────── */}
-      <footer className="max-w-[900px] w-full mx-auto mt-12 mb-6">
+      {/* ─── BOTTOM RECENT FORGES CAROUSEL REDESIGNED ────────────────────────────── */}
+      <footer className="max-w-[1200px] w-full mx-auto mt-20 mb-8 relative z-10">
         {loading ? (
-          <div className="flex gap-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex-1 h-36 rounded-2xl bg-white/40 border border-white/50 animate-pulse" />
+          <div className="flex gap-5">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex-1 h-24 rounded-2xl bg-white/40 border border-white/50 animate-pulse" />
             ))}
           </div>
-        ) : apps.length > 0 ? (
-          <div className="animate-fade-in space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <h3 className="font-serif text-xl italic font-normal text-slate-800">Recent Runtimes</h3>
-              <span className="badge badge-purple text-[10px]">{apps.length} active</span>
+        ) : (
+          <div className="animate-fade-in space-y-4">
+            <div className="flex items-center justify-between px-1 mb-4">
+              <h3 className="font-serif text-[1.8rem] italic font-normal text-slate-800 m-0">Recent Runtimes</h3>
+              <span className="bg-[#eff0fe] text-[#7c6ef5] border border-[#e0e2fe] px-3 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase">
+                {apps.length || 3} active
+              </span>
             </div>
             
-            <div className="carousel-container">
-              {apps.map((app) => (
-                <Link key={app.id} href={`/apps/${app.id}`} className="carousel-card">
-                  <div>
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="badge badge-purple text-[9px] font-mono px-2 py-0.5">{app.config.entity}</span>
-                      <span className="text-[10px] font-bold text-slate-400">{app._count.records} records</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 w-full">
+              {/* Render existing user apps */}
+              {apps.slice(0, 3).map((app) => {
+                const theme = getAppTheme(app.name, app.config.entity);
+                const isError = app.name.toLowerCase().includes("error") || app.name.toLowerCase().includes("fail") || app.description?.toLowerCase().includes("error");
+                return (
+                  <Link key={app.id} href={`/apps/${app.id}`} className="runtime-grid-card p-4.5 flex items-center justify-between text-decoration-none group">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className={`w-11 h-11 rounded-xl ${theme.iconBg} flex items-center justify-center shrink-0`}>
+                        {theme.icon}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-extrabold text-sm text-slate-800 m-0 line-clamp-1 leading-tight group-hover:text-[#e26e38] transition-colors">
+                          {app.name}
+                        </h4>
+                        <p className="text-[10px] font-semibold text-slate-400 mt-1 mb-0.5">
+                          {getRelativeTime(app.updatedAt)}
+                        </p>
+                        {isError ? (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                            <span className="text-[9px] font-extrabold text-red-650 uppercase tracking-wider">Error</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider">Running</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <h4 className="font-extrabold text-sm text-slate-800 leading-tight m-0 line-clamp-1">
-                      {app.name}
-                    </h4>
-                    {app.description && (
-                      <p className="text-[11px] text-slate-500 leading-normal mt-1 mb-0 line-clamp-2">
-                        {app.description}
-                      </p>
-                    )}
-                  </div>
-                  <div className="border-t border-slate-100/50 pt-2 flex items-center justify-between text-[10px] text-slate-400 font-bold">
-                    <span>View Runtime &rarr;</span>
-                    <span>{new Date(app.updatedAt).toLocaleDateString()}</span>
-                  </div>
-                </Link>
-              ))}
+                    <span className="text-slate-350 group-hover:text-slate-700 group-hover:translate-x-0.5 transition-all text-lg pl-2 font-bold select-none">&rarr;</span>
+                  </Link>
+                );
+              })}
+              
+              {/* Render placeholders if user doesn't have 3 apps yet */}
+              {apps.length < 3 && [
+                { id: "mock-1", name: "Inventory Manager", entity: "Product", updatedAt: new Date(Date.now() - 120000).toISOString(), status: "running" },
+                { id: "mock-2", name: "Task Tracker", entity: "Task", updatedAt: new Date(Date.now() - 3600000).toISOString(), status: "running" },
+                { id: "mock-3", name: "Contact Book", entity: "Contact", updatedAt: new Date(Date.now() - 10800000).toISOString(), status: "error" }
+              ].slice(apps.length).map((mock) => {
+                const theme = getAppTheme(mock.name, mock.entity);
+                const isError = mock.status === "error";
+                return (
+                  <button
+                    key={mock.id}
+                    onClick={() => {
+                      notify("info", `Opening starter app workspace for ${mock.name}...`);
+                      router.push(`/apps/new?starter=${encodeURIComponent(mock.name)}`);
+                    }}
+                    className="runtime-grid-card p-4.5 flex items-center justify-between text-decoration-none border-none text-left w-full cursor-pointer bg-white group"
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className={`w-11 h-11 rounded-xl ${theme.iconBg} flex items-center justify-center shrink-0`}>
+                        {theme.icon}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-extrabold text-sm text-slate-800 m-0 line-clamp-1 leading-tight group-hover:text-[#e26e38] transition-colors">
+                          {mock.name}
+                        </h4>
+                        <p className="text-[10px] font-semibold text-slate-400 mt-1 mb-0.5">
+                          {getRelativeTime(mock.updatedAt)}
+                        </p>
+                        {isError ? (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                            <span className="text-[9px] font-extrabold text-red-500 uppercase tracking-wider">Error</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider">Running</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-slate-350 group-hover:text-slate-700 group-hover:translate-x-0.5 transition-all text-lg pl-2 font-bold select-none">&rarr;</span>
+                  </button>
+                );
+              }) }
+
+              {/* Start from scratch dashed card */}
+              <Link href="/apps/new" className="runtime-grid-card p-4.5 flex items-center gap-4 text-decoration-none border border-dashed border-slate-300 bg-[#fcfcfa]/60 hover:bg-white group">
+                <div className="w-11 h-11 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-400 group-hover:text-[#e26e38] group-hover:border-[#e26e38]/30 transition shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <span className="text-lg font-black leading-none">+</span>
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-slate-850 m-0 leading-tight">New App</h4>
+                  <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Start from scratch</p>
+                </div>
+              </Link>
             </div>
-          </div>
-        ) : (
-          <div className="text-center py-6 text-slate-400 text-xs font-semibold bg-white/20 border border-white/40 rounded-2xl">
-            No applications forged yet. Describe your system above to start.
           </div>
         )}
       </footer>
@@ -473,6 +718,7 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* ─── TOAST NOTIFICATIONS ───────────────────────────────────────────────── */}
       <div className="fixed bottom-5 right-5 z-[120] flex w-[min(360px,calc(100vw-40px))] flex-col gap-2">
         {toasts.map((toast) => (
           <div

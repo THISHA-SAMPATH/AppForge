@@ -140,20 +140,16 @@ button, input, select, textarea {
     box-shadow: -18px 18px 35px rgba(15, 23, 42, 0.09), -1px 1px 0px rgba(255, 255, 255, 0.95);
   }
 }
-
-/* ───────────────────────────────────────────
-   FRIXION ZERO-DASHBOARD & MESH CANVAS
-   ──────────────────────────────────────────── */
 .forge-canvas {
   min-height: 100vh;
   position: relative;
-  background-color: #faf4ee;
+  background-color: #faf7f4;
   background-image: 
-    radial-gradient(at 0% 0%, #fffefe 0px, transparent 50%),
-    radial-gradient(at 50% 0%, #fff5ed 0px, transparent 50%),
-    radial-gradient(at 100% 0%, #faecd8 0px, transparent 50%),
-    radial-gradient(at 100% 100%, #f9e2d3 0px, transparent 50%),
-    radial-gradient(at 0% 100%, #fff7f2 0px, transparent 50%);
+    radial-gradient(at 5% 20%, rgba(124, 110, 245, 0.09) 0px, transparent 45%),
+    radial-gradient(at 95% 15%, rgba(242, 114, 70, 0.1) 0px, transparent 45%),
+    radial-gradient(at 50% 50%, #faf7f4 0px, transparent 80%),
+    radial-gradient(at 10% 80%, rgba(219, 39, 119, 0.07) 0px, transparent 40%),
+    radial-gradient(at 90% 85%, rgba(245, 158, 11, 0.08) 0px, transparent 40%);
   background-attachment: fixed;
   overflow-y: auto;
   color: #1e293b;
@@ -986,3 +982,117 @@ button, input, select, textarea {
   background: var(--border);
   margin: 16px 0;
 }
+
+/* Redesigned Dashboard Animations & Classes */
+@keyframes dashboard-float-1 {
+  0%, 100% { 
+    transform: translateY(0) translateX(0) rotate(1deg); 
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.025), 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  }
+  50% { 
+    transform: translateY(-14px) translateX(4px) rotate(-1deg); 
+    box-shadow: 0 25px 50px rgba(226, 110, 56, 0.07), 0 1px 0 rgba(255, 255, 255, 0.65) inset;
+  }
+}
+@keyframes dashboard-float-2 {
+  0%, 100% { 
+    transform: translateY(0) translateX(0) rotate(-1.5deg); 
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.025), 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  }
+  50% { 
+    transform: translateY(-16px) translateX(-5px) rotate(1.5deg); 
+    box-shadow: 0 28px 52px rgba(124, 110, 245, 0.06), 0 1px 0 rgba(255, 255, 255, 0.65) inset;
+  }
+}
+@keyframes dashboard-float-3 {
+  0%, 100% { 
+    transform: translateY(0) translateX(0) rotate(0.8deg); 
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.025), 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  }
+  50% { 
+    transform: translateY(-12px) translateX(5px) rotate(-0.8deg); 
+    box-shadow: 0 22px 48px rgba(16, 185, 129, 0.06), 0 1px 0 rgba(255, 255, 255, 0.65) inset;
+  }
+}
+@keyframes dashboard-float-4 {
+  0%, 100% { 
+    transform: translateY(0) translateX(0) rotate(-1.2deg); 
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.025), 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  }
+  50% { 
+    transform: translateY(-15px) translateX(-4px) rotate(1.2deg); 
+    box-shadow: 0 26px 50px rgba(226, 110, 56, 0.06), 0 1px 0 rgba(255, 255, 255, 0.65) inset;
+  }
+}
+
+.float-anim-1 { animation: dashboard-float-1 7s ease-in-out infinite; }
+.float-anim-2 { animation: dashboard-float-2 8.5s ease-in-out infinite; }
+.float-anim-3 { animation: dashboard-float-3 6.5s ease-in-out infinite; }
+.float-anim-4 { animation: dashboard-float-4 7.8s ease-in-out infinite; }
+
+.glass-floating-card {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.02), 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.glass-floating-card:hover {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 15px 35px rgba(226, 110, 56, 0.08), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  transform: scale(1.02);
+}
+
+.dashboard-gradient-btn {
+  background: linear-gradient(135deg, #f27233 0%, #e05d26 100%);
+  box-shadow: 0 4px 18px rgba(226, 110, 56, 0.35);
+  color: white;
+  transition: all 0.2s ease;
+}
+.dashboard-gradient-btn:hover {
+  background: linear-gradient(135deg, #f5844a 0%, #eb6930 100%);
+  box-shadow: 0 6px 24px rgba(226, 110, 56, 0.45);
+  transform: translateY(-1px);
+}
+.dashboard-gradient-btn:active {
+  transform: translateY(0);
+}
+
+.runtime-grid-card {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 18px;
+  box-shadow: 0 4px 24px rgba(17, 24, 39, 0.03);
+  transition: all 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.runtime-grid-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(124, 110, 245, 0.15);
+  box-shadow: 0 12px 36px rgba(17, 24, 39, 0.07);
+}
+
+.starred-bullet {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+@keyframes path-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.path-connection {
+  stroke: rgba(226, 110, 56, 0.12);
+  stroke-dasharray: 4, 4;
+  animation: path-dash 1.5s linear infinite;
+}
+.path-connection-alt {
+  stroke: rgba(124, 110, 245, 0.12);
+  stroke-dasharray: 4, 4;
+  animation: path-dash 1.5s linear infinite reverse;
+}
+
