@@ -1,11 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { Octokit } from "@octokit/rest";
 import type { AppConfig, FieldConfig } from "@/types/config";
+
+interface ConfigVersion {
+  id: string;
+  version: number;
+  config: AppConfig;
+  createdAt: string;
+}
 
 interface AppData {
   id: string;
@@ -14,7 +20,7 @@ interface AppData {
   config: AppConfig;
   createdAt: string;
   updatedAt: string;
-  versions: Array<{ id: string; version: number; config: any; createdAt: string }>;
+  versions: ConfigVersion[];
   _count: { records: number };
 }
 
@@ -23,6 +29,12 @@ interface AppRecord {
   createdAt: string;
   updatedAt: string;
   [key: string]: unknown;
+}
+
+interface Toast {
+  id: number;
+  type: "success" | "error" | "info";
+  message: string;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -40,6 +52,149 @@ const TYPE_ICONS: Record<string, string> = {
   enum: "≡",
   date: "📅",
 };
+
+type WorkspaceView = "table" | "new" | "edit" | "config" | "history" | "github";
+
+type FieldDiff = {
+  key: string;
+  label: string;
+  status: "added" | "removed" | "changed" | "unchanged";
+  before?: FieldConfig;
+  after?: FieldConfig;
+  changes: string[];
+};
+
+function fieldSignature(field: FieldConfig | undefined) {
+  if (!field) return "";
+  return JSON.stringify({
+    type: field.type,
+    required: Boolean(field.required),
+    options: field.options || [],
+    defaultValue: field.defaultValue ?? null,
+    placeholder: field.placeholder || "",
+  });
+}
+
+function describeFieldChanges(before: FieldConfig, after: FieldConfig) {
+  const changes: string[] = [];
+  if (before.type !== after.type) changes.push(`type: ${before.type} -> ${after.type}`);
+  if (Boolean(before.required) !== Boolean(after.required)) {
+    changes.push(`required: ${Boolean(before.required)} -> ${Boolean(after.required)}`);
+  }
+  if (JSON.stringify(before.options || []) !== JSON.stringify(after.options || [])) {
+    changes.push("enum options changed");
+  }
+  if (JSON.stringify(before.defaultValue ?? null) !== JSON.stringify(after.defaultValue ?? null)) {
+    changes.push("default value changed");
+  }
+  if ((before.placeholder || "") !== (after.placeholder || "")) {
+    changes.push("placeholder changed");
+  }
+  return changes;
+}
+
+function diffConfigs(before: AppConfig, after: AppConfig): FieldDiff[] {
+  const beforeFields = new Map(before.fields.map((field) => [field.name, field]));
+  const afterFields = new Map(after.fields.map((field) => [field.name, field]));
+  const names = Array.from(new Set([...beforeFields.keys(), ...afterFields.keys()])).sort();
+
+  const entityChanges: FieldDiff[] =
+    before.entity !== after.entity
+      ? [{
+          key: "__entity",
+          label: "Entity name",
+          status: "changed",
+          changes: [`entity: ${before.entity} -> ${after.entity}`],
+        }]
+      : [];
+
+  return [
+    ...entityChanges,
+    ...names.map((name) => {
+      const previous = beforeFields.get(name);
+      const current = afterFields.get(name);
+      if (!previous && current) {
+        return { key: name, label: name, status: "added" as const, after: current, changes: [`added ${current.type} field`] };
+      }
+      if (previous && !current) {
+        return { key: name, label: name, status: "removed" as const, before: previous, changes: [`removed ${previous.type} field`] };
+      }
+      if (previous && current && fieldSignature(previous) !== fieldSignature(current)) {
+        return {
+          key: name,
+          label: name,
+          status: "changed" as const,
+          before: previous,
+          after: current,
+          changes: describeFieldChanges(previous, current),
+        };
+      }
+      return {
+        key: name,
+        label: name,
+        status: "unchanged" as const,
+        before: previous,
+        after: current,
+        changes: ["no field-level changes"],
+      };
+    }),
+  ];
+}
+
+function diffBadgeClass(status: FieldDiff["status"]) {
+  if (status === "added") return "badge-green";
+  if (status === "removed") return "badge-red";
+  if (status === "changed") return "badge-amber";
+  return "badge-cyan";
+}
+
+function ConfigDiffPanel({ before, after }: { before: AppConfig; after: AppConfig }) {
+  const diffs = diffConfigs(before, after);
+  const activeDiffs = diffs.filter((diff) => diff.status !== "unchanged");
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {(["added", "removed", "changed", "unchanged"] as const).map((status) => (
+          <div key={status} className="rounded-xl border border-slate-200 bg-white p-3">
+            <div className="text-lg font-black text-slate-800">
+              {diffs.filter((diff) => diff.status === status).length}
+            </div>
+            <div className="text-[10px] font-black uppercase text-slate-400">{status}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+        {(activeDiffs.length ? activeDiffs : diffs.slice(0, 8)).map((diff) => (
+          <div key={diff.key} className="rounded-xl border border-slate-200 bg-white p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-black text-slate-800">{diff.label}</div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {diff.changes.map((change) => (
+                    <span key={change} className="text-[11px] font-semibold text-slate-500">
+                      {change}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <span className={`badge ${diffBadgeClass(diff.status)}`}>{diff.status}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function getWorkspaceView(rawView: string | null | undefined): WorkspaceView {
+  if (rawView === "config" || rawView === "history" || rawView === "github" || rawView === "table") {
+    return rawView;
+  }
+
+  return "table";
+}
 
 function FieldInput({
   field,
@@ -227,13 +382,16 @@ function RecordForm({
 export default function AppPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const appId = params?.appId as string;
   const { data: session } = useSession();
   const [app, setApp] = useState<AppData | null>(null);
   const [records, setRecords] = useState<AppRecord[]>([]);
   const [allApps, setAllApps] = useState<AppData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"table" | "new" | "edit" | "config" | "github">("table");
+  const [recordsLoading, setRecordsLoading] = useState(false);
+  const [recordsError, setRecordsError] = useState("");
+  const [view, setView] = useState<WorkspaceView>(() => getWorkspaceView(searchParams?.get("view")));
   const [editing, setEditing] = useState<AppRecord | null>(null);
   const [saving, setSaving] = useState(false);
   const [configText, setConfigText] = useState("");
@@ -247,7 +405,7 @@ export default function AppPage() {
   const switcherRef = useRef<HTMLDivElement>(null);
 
   // Version Comparison Modal state
-  const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<any | null>(null);
+  const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<ConfigVersion | null>(null);
 
   // GitHub Export State
   const [githubToken, setGithubToken] = useState("");
@@ -256,6 +414,15 @@ export default function AppPage() {
   const [exportLogs, setExportLogs] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
   const [exportedUrl, setExportedUrl] = useState("");
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const notify = useCallback((type: Toast["type"], message: string) => {
+    const id = Date.now();
+    setToasts((prev) => [...prev.slice(-2), { id, type, message }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 3200);
+  }, []);
 
   const loadApp = useCallback(async () => {
     const r = await fetch(`/api/apps/${appId}`);
@@ -271,9 +438,21 @@ export default function AppPage() {
 
   const loadRecords = useCallback(
     async (cfg: AppConfig) => {
-      const r = await fetch(`/api/apps/${appId}/${cfg.entity}`);
-      const d = await r.json();
-      if (d.success) setRecords(d.data);
+      setRecordsLoading(true);
+      setRecordsError("");
+      try {
+        const r = await fetch(`/api/apps/${appId}/${cfg.entity}`);
+        const d = await r.json();
+        if (d.success) {
+          setRecords(d.data);
+        } else {
+          setRecordsError(d.error || "Could not load records");
+        }
+      } catch {
+        setRecordsError("Could not load records. Check your connection and try again.");
+      } finally {
+        setRecordsLoading(false);
+      }
     },
     [appId],
   );
@@ -328,7 +507,22 @@ export default function AppPage() {
 
   const handleSave = async (formData: { [k: string]: unknown }) => {
     if (!app) return;
+    const now = new Date().toISOString();
+    const previousRecords = records;
+    const tempId = `temp_${Date.now()}`;
+    const optimisticRecord: AppRecord = editing
+      ? { ...editing, ...formData, updatedAt: now }
+      : { id: tempId, ...formData, createdAt: now, updatedAt: now };
+
     setSaving(true);
+    setView("table");
+    setEditing(null);
+    setRecords((current) =>
+      editing
+        ? current.map((record) => (record.id === editing.id ? optimisticRecord : record))
+        : [optimisticRecord, ...current],
+    );
+
     try {
       const url = editing
         ? `/api/apps/${appId}/${app.config.entity}/${editing.id}`
@@ -340,10 +534,23 @@ export default function AppPage() {
       });
       const d = await r.json();
       if (d.success) {
-        await loadRecords(app.config);
-        setView("table");
-        setEditing(null);
+        if (!editing && d.data?.id) {
+          setRecords((current) =>
+            current.map((record) =>
+              record.id === tempId
+                ? { ...record, ...d.data, updatedAt: d.data.updatedAt || record.updatedAt }
+                : record,
+            ),
+          );
+        }
+        notify("success", editing ? "Record updated." : "Record created.");
+      } else {
+        setRecords(previousRecords);
+        notify("error", d.error || "Could not save record.");
       }
+    } catch {
+      setRecords(previousRecords);
+      notify("error", "Could not save record. Check your connection and try again.");
     } finally {
       setSaving(false);
     }
@@ -351,10 +558,20 @@ export default function AppPage() {
 
   const handleDelete = async (id: string) => {
     if (!app || !confirm("Delete this record?")) return;
-    await fetch(`/api/apps/${appId}/${app.config.entity}/${id}`, {
-      method: "DELETE",
-    });
-    setRecords((p) => p.filter((r) => r.id !== id));
+    try {
+      const r = await fetch(`/api/apps/${appId}/${app.config.entity}/${id}`, {
+        method: "DELETE",
+      });
+      const d = await r.json();
+      if (d.success) {
+        setRecords((p) => p.filter((r) => r.id !== id));
+        notify("success", "Record deleted.");
+      } else {
+        notify("error", d.error || "Could not delete record.");
+      }
+    } catch {
+      notify("error", "Could not delete record. Check your connection and try again.");
+    }
   };
 
   const handleConfigSave = async (textToSave = configText) => {
@@ -364,6 +581,7 @@ export default function AppPage() {
       parsed = JSON.parse(textToSave);
     } catch {
       setConfigErr("Invalid JSON syntax - check commas and braces");
+      notify("error", "Invalid JSON syntax.");
       return;
     }
     setUpdating(true);
@@ -377,13 +595,22 @@ export default function AppPage() {
       if (d.success) {
         await loadApp();
         setView("table");
-      } else setConfigErr(d.error || "Failed to update configuration");
+        notify("success", "Config saved and runtime recompiled.");
+      } else {
+        const message = d.error || "Failed to update configuration";
+        setConfigErr(message);
+        notify("error", message);
+      }
+    } catch {
+      const message = "Failed to update configuration. Check your connection and try again.";
+      setConfigErr(message);
+      notify("error", message);
     } finally {
       setUpdating(false);
     }
   };
 
-  const handleVersionRestore = async (versionConfig: any) => {
+  const handleVersionRestore = async (versionConfig: AppConfig) => {
     if (!confirm("Are you sure you want to restore this configuration version? All current fields will be overwritten.")) return;
     setSelectedHistoryVersion(null);
     const textStr = JSON.stringify(versionConfig, null, 2);
@@ -393,111 +620,51 @@ export default function AppPage() {
 
   // GitHub Export Logic
   const handleGitHubExport = async () => {
+    if (!app) return;
     if (!githubToken.trim()) {
-      alert("GitHub Personal Access Token is required.");
+      notify("error", "GitHub Personal Access Token is required.");
       return;
     }
     if (!githubRepoName.trim()) {
-      alert("Repository name is required.");
+      notify("error", "Repository name is required.");
       return;
     }
 
     setExporting(true);
-    setExportLogs(["Initializing connection...", "Authenticated successfully!"]);
+    setExportLogs([
+      "Preparing schema and seed data...",
+      "Generating standalone Next.js app on the server...",
+      "Connecting to GitHub...",
+    ]);
     setExportedUrl("");
 
     try {
-      const octokit = new Octokit({ auth: githubToken.trim() });
-      const userRes = await octokit.users.getAuthenticated();
-      const owner = userRes.data.login;
-      addLog(`Authenticated as GitHub user: @${owner}`);
-
-      addLog(`Checking if repository "${owner}/${githubRepoName}" already exists...`);
-      let repoExists = false;
-      try {
-        await octokit.repos.get({ owner, repo: githubRepoName });
-        repoExists = true;
-        addLog(`Repository already exists. We will push updates directly.`);
-      } catch {
-        addLog(`Creating new GitHub repository: "${githubRepoName}"...`);
-        await octokit.repos.createForAuthenticatedUser({
-          name: githubRepoName,
+      const response = await fetch("/api/export/github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appId,
+          token: githubToken.trim(),
+          repoName: githubRepoName.trim(),
           private: githubPrivate,
-          description: `Statically generated database runtime for AppForge - ${app?.name || ""}`,
-        });
-        repoExists = true;
-        addLog(`Repository created successfully!`);
+        }),
+      });
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "GitHub export failed");
       }
 
-      addLog("Generating Next.js application codebase files...");
-      const filesMap = generateNextJsAppCode(app!.name, app!.config, records);
-
-      let sha: string | undefined;
-      try {
-        const refRes = await octokit.git.getRef({ owner, repo: githubRepoName, ref: "heads/main" });
-        sha = refRes.data.object.sha;
-      } catch {}
-
-      const filePaths = Object.keys(filesMap);
-      
-      if (!sha) {
-        for (const filePath of filePaths) {
-          addLog(`Creating file: ${filePath}`);
-          await octokit.repos.createOrUpdateFileContents({
-            owner,
-            repo: githubRepoName,
-            path: filePath,
-            message: `Init: Add ${filePath} template`,
-            content: btoa(unescape(encodeURIComponent(filesMap[filePath as keyof typeof filesMap]))),
-          });
-        }
-      } else {
-        addLog("Creating Git Blobs...");
-        const blobs = await Promise.all(
-          filePaths.map(async (p) => {
-            const blobRes = await octokit.git.createBlob({
-              owner,
-              repo: githubRepoName,
-              content: btoa(unescape(encodeURIComponent(filesMap[p as keyof typeof filesMap]))),
-              encoding: "base64",
-            });
-            return { path: p, sha: blobRes.data.sha, mode: "100644" as const, type: "blob" as const };
-          })
-        );
-
-        addLog("Creating Git Tree...");
-        const treeRes = await octokit.git.createTree({
-          owner,
-          repo: githubRepoName,
-          tree: blobs,
-          base_tree: sha,
-        });
-
-        addLog("Creating Git Commit...");
-        const commitRes = await octokit.git.createCommit({
-          owner,
-          repo: githubRepoName,
-          message: "AppForge compilation: Sync schema and data seed",
-          tree: treeRes.data.sha,
-          parents: [sha],
-        });
-
-        addLog("Updating Branch Reference...");
-        await octokit.git.updateRef({
-          owner,
-          repo: githubRepoName,
-          ref: "heads/main",
-          sha: commitRes.data.sha,
-        });
-      }
-
-      addLog("Export complete!");
-      const url = `https://github.com/${owner}/${githubRepoName}`;
-      setExportedUrl(url);
-      addLog(`Your repository is live at: ${url}`);
-    } catch (e: any) {
+      addLog(`Repository ${data.data.repoCreated ? "created" : "updated"}: ${data.data.repoName}`);
+      addLog(`Generated ${data.data.filesCreated} deployable app files.`);
+      addLog(`Committed ${String(data.data.commitSha).slice(0, 7)} to main.`);
+      addLog("Export complete.");
+      setExportedUrl(data.data.repoUrl);
+      notify("success", "GitHub repo generated.");
+    } catch (e: unknown) {
       console.error(e);
-      addLog(`Error exporting: ${e.message || String(e)}`);
+      addLog(`Error exporting: ${e instanceof Error ? e.message : String(e)}`);
+      notify("error", e instanceof Error ? e.message : "GitHub export failed.");
     } finally {
       setExporting(false);
     }
@@ -507,7 +674,7 @@ export default function AppPage() {
     setExportLogs((p) => [...p, msg]);
   };
 
-  const generateNextJsAppCode = (appName: string, config: AppConfig, records: any[]) => {
+  const generateNextJsAppCode = (appName: string, config: AppConfig, records: AppRecord[]) => {
     const schemaJson = JSON.stringify(config, null, 2);
     const seedJson = JSON.stringify(records, null, 2);
 
@@ -875,6 +1042,8 @@ body {
     return <span>{String(value)}</span>;
   };
 
+  void generateNextJsAppCode;
+
   const filteredRecords = records.filter((rec) => {
     if (!searchQuery) return true;
     return app?.config.fields.some((f) => {
@@ -965,6 +1134,12 @@ body {
             Schema Config
           </button>
           <button
+            onClick={() => setView("history")}
+            className={`tab-bar-item ${view === "history" ? "active" : ""}`}
+          >
+            History
+          </button>
+          <button
             onClick={() => setView("github")}
             className={`tab-bar-item ${view === "github" ? "active" : ""}`}
           >
@@ -1009,21 +1184,50 @@ body {
                   onClick={() => { setView("new"); setEditing(null); }}
                   className="btn-primary glow-btn-primary text-xs py-2 px-4 font-bold"
                 >
-                  + Insert Record
+                  + Add Record
                 </button>
               </div>
             </div>
 
-            {records.length === 0 ? (
+            {recordsLoading ? (
+              <div className="card overflow-hidden bg-white border border-slate-200 shadow-sm">
+                <div className="border-b border-slate-100 p-4">
+                  <div className="skeleton h-4 w-40" />
+                </div>
+                <div className="space-y-3 p-4">
+                  {[0, 1, 2, 3].map((row) => (
+                    <div key={row} className="grid grid-cols-4 gap-3">
+                      <div className="skeleton h-9" />
+                      <div className="skeleton h-9" />
+                      <div className="skeleton h-9" />
+                      <div className="skeleton h-9" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : recordsError ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50/70 p-8 text-center">
+                <h3 className="text-base font-extrabold text-red-700">Records failed to load</h3>
+                <p className="mx-auto mt-1 max-w-sm text-xs font-semibold text-red-500">{recordsError}</p>
+                <button onClick={() => loadRecords(app.config)} className="btn-primary glow-btn-primary mt-5 text-xs py-2 px-4 font-bold">
+                  Retry
+                </button>
+              </div>
+            ) : records.length === 0 ? (
               <div className="text-center py-20 bg-white/70 backdrop-blur border border-slate-200 rounded-2xl">
                 <div className="text-3xl mb-3 font-mono text-slate-300">◈</div>
-                <h3 className="text-base font-extrabold text-slate-700">No records saved</h3>
+                <h3 className="text-base font-extrabold text-slate-700">No records yet. Add one.</h3>
                 <p className="text-xs font-semibold text-slate-400 mt-1 max-w-xs mx-auto">
-                  Start by inserting your first record using the layout builder fields.
+                  Your runtime is ready. Add the first row with the dynamic form generated from this config.
                 </p>
                 <button onClick={() => setView("new")} className="btn-primary glow-btn-primary mt-6 text-xs py-2.5 px-5 font-bold">
-                  + Insert Record
+                  + Add Record
                 </button>
+              </div>
+            ) : filteredRecords.length === 0 ? (
+              <div className="text-center py-16 bg-white/70 backdrop-blur border border-slate-200 rounded-2xl">
+                <h3 className="text-base font-extrabold text-slate-700">No matching records</h3>
+                <p className="text-xs font-semibold text-slate-400 mt-1">Clear the search to return to all rows.</p>
               </div>
             ) : (
               <div className="card overflow-hidden bg-white border border-slate-200 shadow-sm">
@@ -1224,6 +1428,59 @@ body {
           </div>
         )}
 
+        {view === "history" && (
+          <div className="animate-fade-in space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="font-serif text-3xl font-normal italic text-slate-800">Config history</h1>
+                <p className="text-xs font-medium text-slate-400 mt-1">Previous schema configs with saved timestamps</p>
+              </div>
+              <button onClick={() => setView("config")} className="btn-ghost text-xs font-bold">
+                Open Config Editor
+              </button>
+            </div>
+
+            {app.versions.length === 0 ? (
+              <div className="text-center py-16 bg-white/70 backdrop-blur border border-slate-200 rounded-2xl">
+                <h3 className="text-base font-extrabold text-slate-700">No config versions yet</h3>
+                <p className="text-xs font-semibold text-slate-400 mt-1">
+                  Save a schema change and the previous config will appear here with its timestamp.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {app.versions.map((version) => (
+                  <button
+                    key={version.id}
+                    onClick={() => setSelectedHistoryVersion(version)}
+                    className="card w-full bg-white p-5 text-left border border-slate-200 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/20"
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="badge badge-purple">Version #{version.version}</span>
+                          <span className="text-[11px] font-bold text-slate-400">
+                            {new Date(version.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="mt-3 text-sm font-black text-slate-800">
+                          {(version.config as AppConfig).entity || "Untitled entity"}
+                        </div>
+                        <div className="mt-1 text-xs font-semibold text-slate-400">
+                          {((version.config as AppConfig).fields || []).length} fields captured in this config
+                        </div>
+                      </div>
+                      <pre className="json-output max-h-36 w-full overflow-auto text-[10px] md:max-w-xl">
+                        {JSON.stringify(version.config, null, 2)}
+                      </pre>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {view === "github" && (
           <div className="animate-fade-in space-y-6">
             <div>
@@ -1243,7 +1500,7 @@ body {
                     className="input font-mono text-xs"
                   />
                   <p className="text-[10px] font-medium text-slate-400 mt-1 leading-relaxed">
-                    Generate a PAT on GitHub (classic or fine-grained) with `repo` scopes. Operations run completely in-browser. AppForge stores no keys on its server.
+                    Generate a PAT on GitHub (classic or fine-grained) with `repo` scopes. The token is sent only for this export request and is not stored.
                   </p>
                 </div>
 
@@ -1326,7 +1583,7 @@ body {
                   </pre>
                 </div>
                 <div className="text-[10px] font-semibold text-slate-400 mt-2 bg-white border p-2.5 rounded-lg leading-relaxed">
-                  <strong>Statically generated stack:</strong> includes client side database syncing, forms, data grids, Tailwind CSS configs, and layout templates.
+                  <strong>Generated stack:</strong> Next.js app files, schema JSON, seed data, local CRUD runtime, responsive data grid, and deploy-ready project config.
                 </div>
               </div>
             </div>
@@ -1381,9 +1638,9 @@ body {
       )}
 
       {/* Version Comparison Modal */}
-      {selectedHistoryVersion && (
+      {selectedHistoryVersion && app && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm font-sans">
-          <div className="card w-full max-w-3xl animate-fade-up overflow-hidden bg-white shadow-2xl">
+          <div className="card w-full max-w-5xl animate-fade-up overflow-hidden bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#edf0f4] p-6 bg-slate-50">
               <div>
                 <h1 className="font-serif text-2xl font-normal tracking-tight text-[#07090f] italic">Compare Config Version #{selectedHistoryVersion.version}</h1>
@@ -1399,7 +1656,12 @@ body {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 overflow-y-auto max-h-[60vh]">
+            <div className="grid grid-cols-1 gap-4 p-6 overflow-y-auto max-h-[68vh] lg:grid-cols-[0.9fr_1.1fr]">
+              <div>
+                <span className="field-label mb-2">FIELD-LEVEL DIFF</span>
+                <ConfigDiffPanel before={selectedHistoryVersion.config} after={app.config} />
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <span className="field-label mb-2">CURRENT SCHEMAS CONFIG</span>
                 <pre className="json-output h-80 text-[11px] overflow-auto text-slate-350 bg-slate-900 p-3 rounded-lg border border-slate-800">
@@ -1411,6 +1673,7 @@ body {
                 <pre className="json-output h-80 text-[11px] overflow-auto text-slate-350 bg-slate-950 p-3 rounded-lg border border-slate-900">
                   {JSON.stringify(selectedHistoryVersion.config, null, 2)}
                 </pre>
+              </div>
               </div>
             </div>
 
@@ -1428,6 +1691,23 @@ body {
           </div>
         </div>
       )}
+
+      <div className="fixed bottom-5 right-5 z-[120] flex w-[min(360px,calc(100vw-40px))] flex-col gap-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`rounded-2xl border bg-white/90 px-4 py-3 text-xs font-bold shadow-lg backdrop-blur ${
+              toast.type === "success"
+                ? "border-green-200 text-green-700"
+                : toast.type === "error"
+                  ? "border-red-200 text-red-700"
+                  : "border-indigo-200 text-indigo-700"
+            }`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
 
     </div>
   );

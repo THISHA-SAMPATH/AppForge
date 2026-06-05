@@ -39,6 +39,8 @@ The platform is designed around the sleek, high-end **Sparkline/base44** aesthet
 
 AppForge uses a highly normalized schema to run arbitrary user applications on top of a single shared database structure.
 
+Loom tradeoff line: "I chose JSON blob storage over dynamic Prisma migrations because runtime schema generation is unsafe at this scope."
+
 ```mermaid
 erDiagram
     User ||--o{ App : "creates"
@@ -141,5 +143,4 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 3. Select your `AppForge` repository.
 4. Configure the environment variables in Vercel to match your production Neon Database credentials.
 5. Click **Deploy**. Vercel will build and launch your application automatically.
-
 

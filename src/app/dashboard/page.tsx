@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -18,6 +18,12 @@ interface App {
   createdAt: string;
   updatedAt: string;
   _count: { records: number };
+}
+
+interface Toast {
+  id: number;
+  type: "success" | "error" | "info";
+  message: string;
 }
 
 const STARTERS = [
@@ -97,18 +103,37 @@ export default function DashboardPage() {
   const [assistantPrompt, setAssistantPrompt] = useState("");
   const [forging, setForging] = useState(false);
   const [error, setError] = useState("");
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   // Command palette state
   const [showCmdPalette, setShowCmdPalette] = useState(false);
   const [cmdSearch, setCmdSearch] = useState("");
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const inferredConfig = assistantPrompt.trim() ? parseDescriptionToConfig(assistantPrompt) : null;
+  const promptChars = assistantPrompt.length;
+  const promptLimit = 500;
+
+  const notify = useCallback((type: Toast["type"], message: string) => {
+    const id = Date.now();
+    setToasts((prev) => [...prev.slice(-2), { id, type, message }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 3200);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     fetch("/api/apps")
       .then((r) => r.json())
-      .then((d) => { if (!cancelled && d.success) setApps(d.data); })
+      .then((d) => {
+        if (cancelled) return;
+        if (d.success) setApps(d.data);
+        else notify("error", d.error || "Could not load recent runtimes.");
+      })
+      .catch(() => {
+        if (!cancelled) notify("error", "Could not load recent runtimes.");
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
 
     // Click outside handler for profile menu
@@ -136,7 +161,7 @@ export default function DashboardPage() {
       document.removeEventListener("mousedown", handleClickOutside);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [notify]);
 
   const handleForgeAssistant = (promptText = assistantPrompt) => {
     if (!promptText.trim()) return;
@@ -146,9 +171,14 @@ export default function DashboardPage() {
       const config = parseDescriptionToConfig(promptText);
       const encoded = encodeURIComponent(JSON.stringify(config));
       const appName = config.entity + " App";
-      router.push(`/apps/new?prefill=${encoded}&name=${encodeURIComponent(appName)}&desc=${encodeURIComponent(promptText)}&animate=true`);
-    } catch (e: any) {
-      setError(e.message || "Could not parse query.");
+      notify("info", `Forging ${appName} with ${config.fields.length} inferred fields...`);
+      window.setTimeout(() => {
+        router.push(`/apps/new?prefill=${encoded}&name=${encodeURIComponent(appName)}&desc=${encodeURIComponent(promptText)}&animate=true`);
+      }, 520);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Could not parse query.";
+      setError(message);
+      notify("error", message);
       setForging(false);
     }
   };
@@ -180,6 +210,9 @@ export default function DashboardPage() {
           <Link href="/import" className="text-xs font-bold text-slate-650 hover:text-indigo-600 transition text-decoration-none">
             Import CSV
           </Link>
+          <Link href="/settings" className="text-xs font-bold text-slate-650 hover:text-indigo-600 transition text-decoration-none">
+            Settings
+          </Link>
           <button 
             onClick={() => setShowCmdPalette(true)}
             className="text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1 rounded-lg transition border-none cursor-pointer flex items-center gap-1.5"
@@ -210,6 +243,9 @@ export default function DashboardPage() {
                 </Link>
                 <Link href="/import" className="text-xs font-bold text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-decoration-none transition">
                   Import CSV File
+                </Link>
+                <Link href="/settings" className="text-xs font-bold text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-decoration-none transition">
+                  Settings
                 </Link>
                 <button
                   onClick={() => signOut({ callbackUrl: "/login" })}
@@ -245,9 +281,34 @@ export default function DashboardPage() {
               }
             }}
           />
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/50 pt-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {inferredConfig ? (
+                <>
+                  <span className="badge badge-purple text-[9px]">Entity: {inferredConfig.entity}</span>
+                  {inferredConfig.fields.slice(0, 4).map((field) => (
+                    <span
+                      key={field.name}
+                      className={`badge text-[9px] ${field.type === "string" ? "badge-cyan" : field.type === "number" ? "badge-amber" : field.type === "enum" ? "badge-purple" : field.type === "boolean" ? "badge-green" : "badge-red"}`}
+                    >
+                      {field.name}:{field.type}
+                    </span>
+                  ))}
+                  {inferredConfig.fields.length > 4 && (
+                    <span className="text-[10px] font-bold text-slate-400">+{inferredConfig.fields.length - 4} more</span>
+                  )}
+                </>
+              ) : (
+                <span className="text-[10px] font-semibold text-slate-400">Type a workflow and AppForge will infer entity + field types live.</span>
+              )}
+            </div>
+            <span className={`text-[10px] font-black ${promptChars > promptLimit ? "text-red-500" : "text-slate-400"}`}>
+              {promptChars}/{promptLimit}
+            </span>
+          </div>
           <div className="flex items-center justify-between border-t border-slate-200/50 pt-3">
             <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-              <span>Press Enter to Forge</span>
+              <span>{forging ? "Forging your app..." : "Press Enter to Forge"}</span>
             </span>
             <button
               onClick={() => handleForgeAssistant()}
@@ -255,7 +316,10 @@ export default function DashboardPage() {
               className="frixion-btn px-5 py-2 text-xs font-bold"
             >
               {forging ? (
-                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="inline-flex items-center gap-2">
+                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Forging...
+                </span>
               ) : (
                 "Forge App →"
               )}
@@ -273,7 +337,10 @@ export default function DashboardPage() {
           {STARTERS.map((s) => (
             <button
               key={s.label}
-              onClick={() => router.push(`/apps/new?starter=${encodeURIComponent(s.label)}`)}
+              onClick={() => {
+                notify("success", `Loaded ${s.label} starter.`);
+                router.push(`/apps/new?starter=${encodeURIComponent(s.label)}`);
+              }}
               className="glass-pill px-3 py-1.5 rounded-full text-xs font-semibold text-slate-700 hover:text-indigo-600 transition border-none cursor-pointer flex items-center gap-1.5"
             >
               <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: s.color }} />
@@ -405,6 +472,23 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      <div className="fixed bottom-5 right-5 z-[120] flex w-[min(360px,calc(100vw-40px))] flex-col gap-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`rounded-2xl border bg-white/85 px-4 py-3 text-xs font-bold shadow-lg backdrop-blur ${
+              toast.type === "success"
+                ? "border-green-200 text-green-700"
+                : toast.type === "error"
+                  ? "border-red-200 text-red-700"
+                  : "border-indigo-200 text-indigo-700"
+            }`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
 
     </div>
   );

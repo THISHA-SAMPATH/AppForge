@@ -82,8 +82,10 @@ function NewAppPageContent() {
     const qDesc = searchParams?.get("desc");
     const animate = searchParams?.get("animate");
 
-    if (qName) setName(decodeURIComponent(qName));
-    if (qDesc) setDescription(decodeURIComponent(qDesc));
+    queueMicrotask(() => {
+      if (qName) setName(decodeURIComponent(qName));
+      if (qDesc) setDescription(decodeURIComponent(qDesc));
+    });
 
     const finalConfig = prefill 
       ? JSON.parse(decodeURIComponent(prefill))
@@ -93,53 +95,61 @@ function NewAppPageContent() {
 
     const targetText = JSON.stringify(finalConfig, null, 2);
 
-    if (animate === "true") {
-      setIsAnimating(true);
-      setAnimationStep(0);
-      setConfigText("");
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
 
-      // Step 1: Slide prompt box up
-      const t1 = setTimeout(() => {
-        setAnimationStep(1);
-      }, 300);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (animate === "true") {
+        setIsAnimating(true);
+        setAnimationStep(0);
+        setConfigText("");
 
-      // Step 2: Split reveal
-      const t2 = setTimeout(() => {
-        setAnimationStep(2);
-      }, 1000);
+        // Step 1: Slide prompt box up
+        const t1 = setTimeout(() => {
+          setAnimationStep(1);
+        }, 300);
 
-      // Step 3: Stream code
-      const t3 = setTimeout(() => {
-        setAnimationStep(3);
-        let index = 0;
-        const interval = setInterval(() => {
-          const charsToAdd = Math.min(10, targetText.length - index);
-          const chunk = targetText.substring(0, index + charsToAdd);
-          setConfigText(chunk);
-          index += charsToAdd;
+        // Step 2: Split reveal
+        const t2 = setTimeout(() => {
+          setAnimationStep(2);
+        }, 1000);
 
-          if (index >= targetText.length) {
-            clearInterval(interval);
-            setAnimationStep(4);
-            setIsAnimating(false);
-          }
-        }, 20);
-      }, 1400);
+        // Step 3: Stream code
+        const t3 = setTimeout(() => {
+          setAnimationStep(3);
+          let index = 0;
+          const interval = setInterval(() => {
+            const charsToAdd = Math.min(10, targetText.length - index);
+            const chunk = targetText.substring(0, index + charsToAdd);
+            setConfigText(chunk);
+            index += charsToAdd;
 
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-      };
-    } else {
-      setConfigText(targetText);
-    }
+            if (index >= targetText.length) {
+              clearInterval(interval);
+              setAnimationStep(4);
+              setIsAnimating(false);
+            }
+          }, 20);
+        }, 1400);
+
+        timers.push(t1, t2, t3);
+      } else {
+        setConfigText(targetText);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
   }, [searchParams]);
 
   useEffect(() => {
     if (!configText) return;
-    setJsonError(null);
-    try {
+    queueMicrotask(() => {
+      setJsonError(null);
+      try {
       const parsed = JSON.parse(configText);
       const res = validateConfig(parsed);
       setValidation(res);
@@ -147,10 +157,11 @@ function NewAppPageContent() {
         setPreviewFields(res.config.fields);
         setPreviewEntity(res.config.entity);
       }
-    } catch {
+      } catch {
       setJsonError("Invalid JSON syntax — check commas, braces, and quotes");
       setValidation({ valid: false, config: { entity: previewEntity, fields: previewFields, ui: { layout: "table" } }, warnings: [], errors: [{ message: "Parsing Error: Invalid JSON structure." }] });
-    }
+      }
+    });
   }, [configText]);
 
   const handleDeploy = async () => {
@@ -167,8 +178,8 @@ function NewAppPageContent() {
       const data = await res.json();
       if (data.success) { router.push(`/apps/${data.data.app.id}`); }
       else { setDeployError(data.error || "Failed to create application"); }
-    } catch (e: any) {
-      setDeployError(e.message || "An unexpected error occurred");
+    } catch (e: unknown) {
+      setDeployError(e instanceof Error ? e.message : "An unexpected error occurred");
     } finally { setDeploying(false); }
   };
 

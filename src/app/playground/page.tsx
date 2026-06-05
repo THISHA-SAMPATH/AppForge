@@ -1,9 +1,38 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { validateConfig } from '@/engine/validator'
-import type { ValidationResult } from '@/types/config'
+import type { FieldConfig, ValidationResult } from '@/types/config'
+
+const FIELD_TYPE_DEMO: FieldConfig[] = [
+  { name: 'title', type: 'string', placeholder: 'Text input renderer' },
+  { name: 'quantity', type: 'number' },
+  { name: 'published', type: 'boolean' },
+  { name: 'status', type: 'enum', options: ['Draft', 'Live', 'Archived'] },
+  { name: 'launchDate', type: 'date' },
+]
+
+const VALIDATOR_LOGIC = `export function validateConfig(raw: unknown) {
+  const warnings = []
+  const errors = []
+  if (!raw || typeof raw !== "object") {
+    return invalid("Config must be a JSON object")
+  }
+  const entity = sanitizeEntityName(raw.entity)
+  const fields = Array.isArray(raw.fields) ? raw.fields : []
+  if (!Array.isArray(raw.fields)) warn("Fields array missing")
+  const sanitized = fields
+    .map((field, index) => sanitizeField(field, index))
+    .filter(Boolean)
+  const deduped = dedupeFieldNames(sanitized)
+  return {
+    valid: errors.length === 0,
+    config: { entity, fields: deduped, ui: sanitizeUI(raw.ui) },
+    warnings,
+    errors,
+  }
+}`
 
 const BROKEN_EXAMPLES = [
   {
@@ -86,11 +115,30 @@ const BROKEN_EXAMPLES = [
   },
 ]
 
+const REQUIRED_PROOF_CASES = BROKEN_EXAMPLES.filter((example) =>
+  ['Missing fields array', 'Unknown field type', 'Duplicate field names'].includes(example.label)
+)
+
+function getStructuredOutput(rawConfig: string) {
+  try {
+    return validateConfig(JSON.parse(rawConfig))
+  } catch {
+    return validateConfig(rawConfig)
+  }
+}
+
 export default function PlaygroundPage() {
   const [input, setInput] = useState(BROKEN_EXAMPLES[0].config)
-  const [result, setResult] = useState<ValidationResult | null>(null)
+  const [result, setResult] = useState<ValidationResult | null>(() => validateConfig(JSON.parse(BROKEN_EXAMPLES[0].config)))
   const [parseError, setParseError] = useState('')
   const [activeExample, setActiveExample] = useState(0)
+  const [demoValues, setDemoValues] = useState<Record<string, unknown>>({
+    title: 'Launch checklist',
+    quantity: 12,
+    published: true,
+    status: 'Live',
+    launchDate: '2026-06-05',
+  })
 
   const runValidation = useCallback((raw: string) => {
     setParseError('')
@@ -99,23 +147,58 @@ export default function PlaygroundPage() {
       parsed = JSON.parse(raw)
     } catch {
       parsed = raw
-      setParseError('Input is not valid JSON — validator will handle it gracefully')
+      setParseError('Input is not valid JSON - validator will handle it gracefully')
     }
     setResult(validateConfig(parsed))
   }, [])
-
-  // Auto-run validation on mount for default example
-  useEffect(() => {
-    runValidation(BROKEN_EXAMPLES[0].config)
-  }, [runValidation])
 
   const selectExample = (index: number) => {
     setActiveExample(index)
     setInput(BROKEN_EXAMPLES[index].config)
     let parsed: unknown
-    try { parsed = JSON.parse(BROKEN_EXAMPLES[index].config) } catch { parsed = BROKEN_EXAMPLES[index].config }
+    try {
+      parsed = JSON.parse(BROKEN_EXAMPLES[index].config)
+      setParseError('')
+    } catch {
+      parsed = BROKEN_EXAMPLES[index].config
+      setParseError('Input is not valid JSON - validator will handle it gracefully')
+    }
     setResult(validateConfig(parsed))
-    setParseError('')
+  }
+
+  const renderDemoInput = (field: FieldConfig) => {
+    const value = demoValues[field.name]
+    const update = (next: unknown) => setDemoValues((prev) => ({ ...prev, [field.name]: next }))
+
+    if (field.type === 'boolean') {
+      return (
+        <button
+          type="button"
+          onClick={() => update(!value)}
+          className="h-9 w-16 rounded-full border border-slate-200 bg-slate-100 p-1 text-left transition"
+          style={{ background: value ? 'rgba(31, 122, 255, 0.14)' : '#f1f5f9' }}
+        >
+          <span
+            className="block h-7 w-7 rounded-full bg-white shadow transition-transform"
+            style={{ transform: value ? 'translateX(28px)' : 'translateX(0)' }}
+          />
+        </button>
+      )
+    }
+    if (field.type === 'enum') {
+      return (
+        <select className="select" value={String(value ?? '')} onChange={(e) => update(e.target.value)}>
+          {field.options?.map((option) => <option key={option}>{option}</option>)}
+        </select>
+      )
+    }
+    if (field.type === 'date') {
+      return <input className="input" type="date" value={String(value ?? '')} onChange={(e) => update(e.target.value)} />
+    }
+    if (field.type === 'number') {
+      return <input className="input" type="number" value={String(value ?? '')} onChange={(e) => update(Number(e.target.value))} />
+    }
+    return <input className="input" type="text" value={String(value ?? '')} onChange={(e) => update(e.target.value)} />
   }
 
   return (
@@ -145,6 +228,23 @@ export default function PlaygroundPage() {
               AppForge never crashes on bad input. Paste any broken JSON below and see exactly how the validator handles it — what it sanitizes, defaults, and rejects.
             </p>
           </div>
+
+          <section className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {REQUIRED_PROOF_CASES.map((example) => (
+              <div key={example.label} className="card bg-white p-4 border border-slate-200 shadow-sm">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <h2 className="m-0 text-sm font-black text-slate-850">{example.label}</h2>
+                    <p className="m-0 mt-0.5 text-[10px] font-semibold text-slate-400">{example.description}</p>
+                  </div>
+                  <span className="badge badge-purple text-[9px]">proof</span>
+                </div>
+                <pre className="json-output max-h-72 overflow-auto text-[10px] leading-4">
+                  {JSON.stringify(getStructuredOutput(example.config), null, 2)}
+                </pre>
+              </div>
+            ))}
+          </section>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {/* Examples sidebar */}
@@ -275,6 +375,38 @@ export default function PlaygroundPage() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="card bg-white p-5 border border-slate-200 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="field-label tracking-widest">Live validator logic</h3>
+                <span className="badge badge-cyan text-[9px]">18 lines</span>
+              </div>
+              <pre className="json-output max-h-96 overflow-auto text-[11px] leading-5">
+                {VALIDATOR_LOGIC}
+              </pre>
+            </div>
+
+            <div className="card bg-white p-5 border border-slate-200 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="field-label tracking-widest">Field type registry proof</h3>
+                <span className="badge badge-green text-[9px]">5 renderers</span>
+              </div>
+              <div className="space-y-3">
+                {FIELD_TYPE_DEMO.map((field) => (
+                  <div key={field.name} className="grid gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 sm:grid-cols-[120px_1fr] sm:items-center">
+                    <div>
+                      <div className="text-xs font-black text-slate-800">{field.name}</div>
+                      <span className={`badge text-[9px] ${field.type === 'string' ? 'badge-cyan' : field.type === 'number' ? 'badge-amber' : field.type === 'enum' ? 'badge-purple' : field.type === 'boolean' ? 'badge-green' : 'badge-red'}`}>
+                        {field.type}
+                      </span>
+                    </div>
+                    {renderDemoInput(field)}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </main>

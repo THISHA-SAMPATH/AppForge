@@ -8,6 +8,13 @@ import type { AppConfig } from '@/types/config'
 
 type Step = 'upload' | 'preview' | 'importing' | 'done'
 
+interface ImportSummary {
+  appId: string
+  rowsImported: number
+  entity: string
+  fields: number
+}
+
 const TYPE_COLORS: Record<string, string> = {
   string: 'badge-cyan', number: 'badge-amber',
   boolean: 'badge-green', enum: 'badge-purple', date: 'badge-red',
@@ -25,6 +32,7 @@ export default function ImportPage() {
   const [warnings, setWarnings] = useState<Array<{ message: string }>>([])
   const [error, setError] = useState('')
   const [importing, setImporting] = useState(false)
+  const [importSummary, setImportSummary] = useState<ImportSummary | null>(null)
 
   const processFile = useCallback((file: File) => {
     if (!file.name.endsWith('.csv')) { setError('Please upload a .csv file'); return }
@@ -43,17 +51,22 @@ export default function ImportPage() {
         setHeaders(hdrs)
         setRows(dataRows)
 
-        // Get inferred config from API
-        const res = await fetch('/api/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: file.name.replace('.csv',''), headers: hdrs, rows: dataRows, appId: 'preview' })
-        })
-        const d = await res.json()
-        if (d.success) {
-          setInferredConfig(d.data.config)
-          setWarnings(d.data.warnings || [])
-          setStep('preview')
+        try {
+          const res = await fetch('/api/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: file.name.replace('.csv',''), headers: hdrs, rows: dataRows, appId: 'preview' })
+          })
+          const d = await res.json()
+          if (d.success) {
+            setInferredConfig(d.data.config)
+            setWarnings(d.data.warnings || [])
+            setStep('preview')
+          } else {
+            setError(d.error || 'Could not infer CSV schema')
+          }
+        } catch {
+          setError('Could not infer CSV schema. Check your connection and try again.')
         }
       },
       error: () => setError('Failed to parse CSV')
@@ -83,12 +96,21 @@ export default function ImportPage() {
       })
       const d = await res.json()
       if (d.success) {
+        setImportSummary({
+          appId: d.data.app.id,
+          rowsImported: d.data.rowsImported,
+          entity: d.data.config.entity,
+          fields: d.data.config.fields.length,
+        })
         setStep('done')
-        setTimeout(() => router.push(`/apps/${d.data.app.id}`), 1500)
+        setTimeout(() => router.push(`/apps/${d.data.app.id}`), 1800)
       } else {
         setError(d.error || 'Import failed')
         setStep('preview')
       }
+    } catch {
+      setError('Import failed. Check your connection and try again.')
+      setStep('preview')
     } finally {
       setImporting(false)
     }
@@ -223,6 +245,16 @@ export default function ImportPage() {
                       ))}
                     </div>
                   )}
+
+                  <div className="card bg-white p-4 border border-slate-200 shadow-sm">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="field-label mb-0">Generated config</h3>
+                      <span className="badge badge-green text-[9px]">will be saved</span>
+                    </div>
+                    <pre className="json-output max-h-72 overflow-auto text-[10px] leading-4">
+                      {JSON.stringify(inferredConfig, null, 2)}
+                    </pre>
+                  </div>
                 </div>
 
                 {/* Right — data preview */}
@@ -247,6 +279,21 @@ export default function ImportPage() {
                       +{rows.length - 5} more rows will be imported
                     </p>
                   )}
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="text-lg font-black text-slate-850">{rows.length}</div>
+                      <div className="text-[10px] font-bold uppercase text-slate-400">Rows</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="text-lg font-black text-slate-850">{inferredConfig.fields.length}</div>
+                      <div className="text-[10px] font-bold uppercase text-slate-400">Fields</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="truncate text-lg font-black text-slate-850">{inferredConfig.entity}</div>
+                      <div className="text-[10px] font-bold uppercase text-slate-400">Entity</div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -282,7 +329,23 @@ export default function ImportPage() {
             <div className="text-center py-32 animate-fade-in card bg-white border border-slate-200 shadow-sm mt-8">
               <div className="text-6xl mb-4">✅</div>
               <h2 className="text-xl font-black text-slate-800 mb-2">Import complete!</h2>
-              <p className="text-xs font-medium text-slate-500">Redirecting to your new app...</p>
+              {importSummary ? (
+                <div className="mx-auto mt-5 grid max-w-md grid-cols-3 gap-2 text-left">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-lg font-black text-slate-850">{importSummary.rowsImported}</div>
+                    <div className="text-[10px] font-bold uppercase text-slate-400">Rows</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-lg font-black text-slate-850">{importSummary.fields}</div>
+                    <div className="text-[10px] font-bold uppercase text-slate-400">Fields</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="truncate text-lg font-black text-slate-850">{importSummary.entity}</div>
+                    <div className="text-[10px] font-bold uppercase text-slate-400">Entity</div>
+                  </div>
+                </div>
+              ) : null}
+              <p className="mt-5 text-xs font-medium text-slate-500">Redirecting to your new app...</p>
             </div>
           )}
         </main>
