@@ -911,7 +911,7 @@ body {
       <header className="forge-topnav">
         <div className="flex items-center gap-2" ref={switcherRef}>
           <Link href="/dashboard" className="text-decoration-none font-extrabold text-sm text-[#7c6ef5] flex items-center gap-2">
-            <img src="/icon.png" className="w-6 h-6 object-contain rounded-md" alt="AppForge" />
+            <img src="/logo.png" className="w-6 h-6 object-contain rounded-md" alt="AppForge" />
             <span>AppForge</span>
           </Link>
           <span className="text-slate-300 font-semibold text-xs">/</span>

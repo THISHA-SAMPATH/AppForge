@@ -182,7 +182,7 @@ function NewAppPageContent() {
     return (
       <div className="forge-canvas flex flex-col items-center justify-center p-6">
         <div className={`glass-prompt-container p-8 max-w-[640px] w-full text-center transition-all duration-700 ${animationStep === 1 ? "-translate-y-[20vh] opacity-30 scale-95" : ""}`}>
-          <img src="/icon.png" className="w-12 h-12 object-contain rounded-2xl mx-auto mb-6 shadow-lg shadow-[#7c6ef5]/20 animate-bounce" alt="AppForge" />
+          <img src="/logo.png" className="w-12 h-12 object-contain rounded-2xl mx-auto mb-6 shadow-lg shadow-[#7c6ef5]/20 animate-bounce" alt="AppForge" />
           <h2 className="font-serif text-3xl font-normal italic mb-3 text-slate-800">Forging your application...</h2>
           <p className="text-xs text-slate-400 font-semibold mb-6">AppForge is compiling your config schema</p>
           <div className="text-sm font-semibold text-slate-650 bg-white/40 p-4 rounded-xl border border-white/50 text-left italic">
@@ -200,7 +200,7 @@ function NewAppPageContent() {
       <header className="top-nav">
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <Link href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
-            <img src="/icon.png" style={{ width: 30, height: 30, objectFit: "contain", borderRadius: 8 }} alt="AppForge" />
+            <img src="/logo.png" style={{ width: 30, height: 30, objectFit: "contain", borderRadius: 8 }} alt="AppForge" />
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text-muted)", fontSize: 13 }}>
             <Link href="/dashboard" style={{ color: "var(--text-muted)", textDecoration: "none", fontWeight: 600, fontSize: 13 }}>Dashboard</Link>

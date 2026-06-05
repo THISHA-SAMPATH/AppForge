@@ -127,7 +127,7 @@ export default function PlaygroundPage() {
         <header className="relative z-40 mx-auto mt-6 flex h-14 items-center justify-between gap-2 rounded-2xl px-4 spark-nav max-w-7xl">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="flex items-center gap-2 text-xs text-[#555d70] hover:text-black font-bold">
-              <span className="grid h-7 w-7 place-items-center rounded-lg bg-black text-[10px] font-black text-white">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-black text-[10px] font-black text-white">
                 &larr;
               </span>
               <span className="hidden sm:inline">Back</span>

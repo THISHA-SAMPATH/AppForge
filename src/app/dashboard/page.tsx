@@ -167,7 +167,7 @@ export default function DashboardPage() {
       <header className="forge-topnav">
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="flex items-center gap-2 text-decoration-none">
-            <img src="/icon.png" className="w-8 h-8 object-contain rounded-lg" alt="AppForge" />
+            <img src="/logo.png" className="w-8 h-8 object-contain rounded-lg" alt="AppForge" />
             <span className="font-extrabold tracking-tight text-sm text-slate-800">AppForge</span>
           </Link>
         </div>

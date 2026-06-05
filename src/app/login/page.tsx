@@ -87,7 +87,7 @@ export default function LoginPage() {
           style={{ width: "calc(100% - 20px)", maxWidth: 720 }}
         >
           <div className="flex items-center gap-2 font-black">
-            <img src="/icon.png" className="w-7 h-7 object-contain rounded-lg" alt="AppForge" />
+            <img src="/logo.png" className="w-8 h-8 object-contain rounded-lg" alt="AppForge" />
             <span>AppForge</span>
           </div>
           <nav className="hidden items-center gap-7 text-xs font-semibold text-[#232633] md:flex">
