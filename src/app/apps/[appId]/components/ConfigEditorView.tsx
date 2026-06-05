@@ -1,7 +1,7 @@
 "use client";
 
 import type { AppConfig } from "@/types/config";
-import type { AppData, ConfigVersion, WorkspaceView } from "../page";
+import type { AppData, ConfigVersion, WorkspaceView } from "../types";
 
 const TYPE_COLORS: Record<string, string> = {
   string: "badge-cyan",

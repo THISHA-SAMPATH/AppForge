@@ -5,41 +5,11 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import type { AppConfig, FieldConfig } from "@/types/config";
+import type { AppData, ConfigVersion, WorkspaceView, AppRecord, Toast } from "./types";
 
 import { ConfigEditorView } from "./components/ConfigEditorView";
 import { HistoryView } from "./components/HistoryView";
 import { GitHubExportView } from "./components/GitHubExportView";
-
-export interface ConfigVersion {
-  id: string;
-  version: number;
-  config: AppConfig;
-  createdAt: string;
-}
-
-export interface AppData {
-  id: string;
-  name: string;
-  description: string | null;
-  config: AppConfig;
-  createdAt: string;
-  updatedAt: string;
-  versions: ConfigVersion[];
-  _count: { records: number };
-}
-
-interface AppRecord {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  [key: string]: unknown;
-}
-
-interface Toast {
-  id: number;
-  type: "success" | "error" | "info";
-  message: string;
-}
 
 const TYPE_COLORS: Record<string, string> = {
   string: "badge-cyan",
@@ -57,7 +27,6 @@ const TYPE_ICONS: Record<string, string> = {
   date: "📅",
 };
 
-export type WorkspaceView = "table" | "new" | "edit" | "config" | "history" | "github";
 
 type FieldDiff = {
   key: string;
@@ -411,6 +380,10 @@ export default function AppPage() {
   // Version Comparison Modal state
   const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<ConfigVersion | null>(null);
 
+  // Confirmation modal states
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmRestoreConfig, setConfirmRestoreConfig] = useState<AppConfig | null>(null);
+
   // GitHub Export State
   const [githubToken, setGithubToken] = useState("");
   const [githubRepoName, setGithubRepoName] = useState("");
@@ -560,8 +533,14 @@ export default function AppPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!app || !confirm("Delete this record?")) return;
+  const handleDelete = (id: string) => {
+    setConfirmDeleteId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!app || !confirmDeleteId) return;
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
     try {
       const r = await fetch(`/api/apps/${appId}/${app.config.entity}/${id}`, {
         method: "DELETE",
@@ -614,10 +593,16 @@ export default function AppPage() {
     }
   };
 
-  const handleVersionRestore = async (versionConfig: AppConfig) => {
-    if (!confirm("Are you sure you want to restore this configuration version? All current fields will be overwritten.")) return;
+  const handleVersionRestore = (versionConfig: AppConfig) => {
+    setConfirmRestoreConfig(versionConfig);
+  };
+
+  const confirmVersionRestore = async () => {
+    if (!confirmRestoreConfig) return;
+    const configToRestore = confirmRestoreConfig;
+    setConfirmRestoreConfig(null);
     setSelectedHistoryVersion(null);
-    const textStr = JSON.stringify(versionConfig, null, 2);
+    const textStr = JSON.stringify(configToRestore, null, 2);
     setConfigText(textStr);
     await handleConfigSave(textStr);
   };
@@ -678,356 +663,6 @@ export default function AppPage() {
     setExportLogs((p) => [...p, msg]);
   };
 
-  const generateNextJsAppCode = (appName: string, config: AppConfig, records: AppRecord[]) => {
-    const schemaJson = JSON.stringify(config, null, 2);
-    const seedJson = JSON.stringify(records, null, 2);
-
-    const packageJson = `{
-  "name": "${appName.toLowerCase().replace(/[^a-z0-9]/g, "-")}",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "next": "14.2.3",
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5"
-  }
-}`;
-
-    const readmeMd = `# ${appName}
-
-This application was generated dynamically from AppForge using a metadata-driven config schema.
-
-## Features
-- Fully compiled React components mapped to your data fields
-- Client-side database runtime storing records inside browser \`localStorage\` for instant local testing and static hosting
-- Responsive, modern Tailwind CSS layout
-
-## Getting Started
-1. Install dependencies:
-   \`\`\`bash
-   npm install
-   \`\`\`
-2. Run development server:
-   \`\`\`bash
-   npm run dev
-   \`\`\`
-3. Open http://localhost:3000 to view your application!
-
-## Deployment
-You can deploy this repository directly to Vercel in one click. Since it uses browser-based local storage, it does not require database configuration to run!
-`;
-
-    const pageCode = `"use client";
-
-import React, { useState, useEffect } from "react";
-
-const schema = ${schemaJson};
-const seedData = ${seedJson};
-
-export default function Home() {
-  const [records, setRecords] = useState<any[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<any | null>(null);
-  const [search, setSearch] = useState("");
-  const [formData, setFormData] = useState<any>({});
-
-  useEffect(() => {
-    const local = localStorage.getItem("appforge_records_" + schema.entity);
-    if (local) {
-      setRecords(JSON.parse(local));
-    } else {
-      setRecords(seedData);
-      localStorage.setItem("appforge_records_" + schema.entity, JSON.stringify(seedData));
-    }
-    setLoaded(true);
-  }, []);
-
-  const saveToLocalStorage = (newRecords: any[]) => {
-    setRecords(newRecords);
-    localStorage.setItem("appforge_records_" + schema.entity, JSON.stringify(newRecords));
-  };
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editing) {
-      const updated = records.map(r => r.id === editing.id ? { ...r, ...formData, updatedAt: new Date().toISOString() } : r);
-      saveToLocalStorage(updated);
-    } else {
-      const newRecord = {
-        id: "rec_" + Math.random().toString(36).substr(2, 9),
-        ...formData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      saveToLocalStorage([newRecord, ...records]);
-    }
-    setShowForm(false);
-    setEditing(null);
-    setFormData({});
-  };
-
-  const handleDelete = (id: string) => {
-    if (!confirm("Are you sure you want to delete this record?")) return;
-    const filtered = records.filter(r => r.id !== id);
-    saveToLocalStorage(filtered);
-  };
-
-  const startEdit = (record: any) => {
-    setEditing(record);
-    setFormData(record);
-    setShowForm(true);
-  };
-
-  const startNew = () => {
-    setEditing(null);
-    const initialData: any = {};
-    schema.fields.forEach((f: any) => {
-      initialData[f.name] = f.defaultValue !== undefined ? f.defaultValue : (f.type === "boolean" ? false : "");
-    });
-    setFormData(initialData);
-    setShowForm(true);
-  };
-
-  const filtered = records.filter(r => {
-    return schema.fields.some((f: any) => {
-      const val = r[f.name];
-      return val && String(val).toLowerCase().includes(search.toLowerCase());
-    });
-  });
-
-  if (!loaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-6">
-      <div className="max-w-6xl mx-auto space-y-8">
-        <header className="flex justify-between items-center bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-          <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">{schema.entity} Directory</h1>
-            <p className="text-sm text-slate-500 font-medium mt-0.5">Manage records for entity <strong>{schema.entity}</strong></p>
-          </div>
-          <button 
-            onClick={startNew}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-xl text-sm transition"
-          >
-            + Add Record
-          </button>
-        </header>
-
-        <div className="flex gap-4 items-center">
-          <input
-            type="text"
-            placeholder="Search records..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-          />
-          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">{filtered.length} of {records.length} records</div>
-        </div>
-
-        {showForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 className="font-extrabold text-lg">{editing ? "Edit Record" : "Add New Record"}</h3>
-                <button type="button" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 font-bold border-none bg-transparent cursor-pointer">✕</button>
-              </div>
-              <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                {schema.fields.map((field: any) => (
-                  <div key={field.name} className="space-y-1.5">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      {field.name} {field.required && <span className="text-red-500">*</span>}
-                    </label>
-                    {field.type === "boolean" ? (
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, [field.name]: !formData[field.name] })}
-                          className={"w-11 h-6 rounded-full relative transition-colors duration-200 border-none cursor-pointer " + (formData[field.name] ? "bg-indigo-600" : "bg-slate-200")}
-                        >
-                          <div className={"w-5 h-5 bg-white rounded-full absolute top-0.5 left-0.5 transition-transform duration-200 " + (formData[field.name] ? "translate-x-5" : "")} />
-                        </button>
-                        <span className="text-sm text-slate-600 font-medium">{formData[field.name] ? "Yes" : "No"}</span>
-                      </div>
-                    ) : field.type === "enum" ? (
-                      <select
-                        value={formData[field.name] || ""}
-                        onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
-                        required={field.required}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                      >
-                        <option value="">Select option...</option>
-                        {field.options?.map((opt: string) => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    ) : field.type === "date" ? (
-                      <input
-                        type="date"
-                        value={formData[field.name] || ""}
-                        onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
-                        required={field.required}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                      />
-                    ) : field.type === "number" ? (
-                      <input
-                        type="number"
-                        value={formData[field.name] !== undefined ? formData[field.name] : ""}
-                        onChange={(e) => setFormData({ ...formData, [field.name]: Number(e.target.value) })}
-                        required={field.required}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        value={formData[field.name] || ""}
-                        onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
-                        required={field.required}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                      />
-                    )}
-                  </div>
-                ))}
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                  <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm font-bold border border-slate-200 rounded-xl hover:bg-slate-50 transition border-solid bg-transparent cursor-pointer">Cancel</button>
-                  <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition border-none cursor-pointer">Save Record</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          {filtered.length === 0 ? (
-            <div className="p-20 text-center">
-              <div className="text-slate-300 text-4xl mb-4 font-mono">◈</div>
-              <h3 className="font-extrabold text-lg text-slate-800">No records found</h3>
-              <p className="text-sm text-slate-500 max-w-xs mx-auto mt-1">Try resetting search query or add a new record to get started.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-400 font-extrabold text-xs uppercase tracking-wider">
-                    {schema.fields.map((f: any) => (
-                      <th key={f.name} className="px-6 py-4">{f.name}</th>
-                    ))}
-                    <th className="px-6 py-4">Created</th>
-                    <th className="px-6 py-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filtered.map((r: any) => (
-                    <tr key={r.id} className="hover:bg-slate-50/50 transition duration-150">
-                      {schema.fields.map((f: any) => (
-                        <td key={f.name} className="px-6 py-4 font-medium text-slate-700">
-                          {f.type === "boolean" ? (
-                            <span className={"inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold " + (r[f.name] ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100")}>
-                              {r[f.name] ? "Yes" : "No"}
-                            </span>
-                          ) : f.type === "enum" ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-100">
-                              {String(r[f.name] || "")}
-                            </span>
-                          ) : f.type === "date" && r[f.name] ? (
-                            <span>{new Date(r[f.name]).toLocaleDateString()}</span>
-                          ) : (
-                            <span>{String(r[f.name] !== undefined ? r[f.name] : "")}</span>
-                          )}
-                        </td>
-                      ))}
-                      <td className="px-6 py-4 text-xs font-semibold text-slate-400">
-                        {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ""}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex gap-2.5">
-                          <button onClick={() => startEdit(r)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition border-none bg-transparent cursor-pointer">Edit</button>
-                          <button onClick={() => handleDelete(r.id)} className="text-xs font-bold text-rose-600 hover:text-rose-800 transition border-none bg-transparent cursor-pointer">Delete</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}`;
-
-    return {
-      "package.json": packageJson,
-      "README.md": readmeMd,
-      "src/app/page.tsx": pageCode,
-      "tailwind.config.js": `/** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: [
-    "./src/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-}`,
-      "postcss.config.js": `module.exports = {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-}`,
-      "src/app/layout.tsx": `import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"] });
-
-export const metadata: Metadata = {
-  title: "${appName}",
-  description: "Compiled statically from AppForge",
-};
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="en">
-      <body className={inter.className + " bg-slate-50 min-h-screen"}>{children}</body>
-    </html>
-  );
-}`,
-      "src/app/globals.css": `@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-body {
-  background-color: rgb(248 250 252);
-}`
-    };
-  };
-
   const renderCell = (value: unknown, type: string) => {
     if (value === null || value === undefined || value === "")
       return <span style={{ color: "var(--text-muted)" }}>—</span>;
@@ -1045,8 +680,6 @@ body {
       return <span>{new Date(String(value)).toLocaleDateString()}</span>;
     return <span>{String(value)}</span>;
   };
-
-  void generateNextJsAppCode;
 
   const filteredRecords = records.filter((rec) => {
     if (!searchQuery) return true;
@@ -1450,6 +1083,48 @@ body {
                 className="btn-primary glow-btn-primary px-5 py-2 text-xs font-bold gap-1"
               >
                 Restore Version #{selectedHistoryVersion.version} Config
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Record Confirmation Modal */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
+          <div className="card w-full max-w-md animate-fade-up overflow-hidden bg-white shadow-2xl p-6 relative">
+            <h3 className="font-serif text-2xl italic font-normal text-slate-800 m-0">Delete Record</h3>
+            <p className="text-xs text-slate-400 mt-2 mb-6">Are you sure you want to delete this record? This action cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setConfirmDeleteId(null)} className="btn-ghost text-xs">
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-5 py-2 bg-[#e44949] hover:bg-red-700 text-white font-bold rounded-xl text-xs transition border-none cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restore Version Confirmation Modal */}
+      {confirmRestoreConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
+          <div className="card w-full max-w-md animate-fade-up overflow-hidden bg-white shadow-2xl p-6 relative">
+            <h3 className="font-serif text-2xl italic font-normal text-slate-800 m-0">Restore Configuration</h3>
+            <p className="text-xs text-slate-400 mt-2 mb-6">Are you sure you want to restore this configuration version? All current fields will be overwritten.</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setConfirmRestoreConfig(null)} className="btn-ghost text-xs">
+                Cancel
+              </button>
+              <button
+                onClick={confirmVersionRestore}
+                className="btn-primary glow-btn-primary px-5 py-2 text-xs font-bold"
+              >
+                Restore
               </button>
             </div>
           </div>
