@@ -838,16 +838,16 @@ body {
 
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#d9dde3]">
-        <div className="w-8 h-8 border-2 border-slate-350 border-t-[#1f7aff] rounded-full animate-spin" />
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-canvas)" }}>
+        <div style={{ width: 32, height: 32, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%" }} className="animate-spin" />
       </div>
     );
 
   if (!app)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#d9dde3]">
-        <div className="text-center bg-white p-8 rounded-2xl border shadow-sm">
-          <p className="mb-4 text-sm font-semibold text-slate-500">App workspace not found</p>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-canvas)" }}>
+        <div style={{ textAlign: "center", background: "#fff", padding: 32, borderRadius: 16, border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}>
+          <p style={{ marginBottom: 16, fontSize: 14, fontWeight: 600, color: "var(--text-muted)" }}>App workspace not found</p>
           <Link href="/dashboard" className="btn-primary text-xs font-bold px-4 py-2">
             Back to Dashboard
           </Link>
@@ -856,87 +856,118 @@ body {
     );
 
   return (
-    <main className="min-h-screen bg-[#d9dde3] p-3 text-[#07090f] sm:p-5">
-      <section className="relative min-h-[calc(100vh-24px)] overflow-hidden rounded-[22px] border-[10px] border-white bg-[#fbfbfc] shadow-[0_18px_55px_rgba(15,23,42,0.12)] sm:min-h-[calc(100vh-40px)] sm:border-[14px]">
-        <div className="absolute inset-4 rounded-[18px] border border-[#e7e9ee]" />
+    <div className="sidebar-shell">
+      {/* ─── DARK SIDEBAR ─────────────────────────────────────────────────────────── */}
+      <aside className="sidebar">
+        {/* Logo */}
+        <div className="sidebar-logo">
+          <div className="sidebar-logo-icon">AF</div>
+          <span className="sidebar-logo-text">AppForge</span>
+        </div>
 
-        {/* Header navigation bar */}
-        <header className="relative z-40 mx-auto mt-6 flex h-14 items-center justify-between gap-2 rounded-2xl px-4 spark-nav max-w-7xl">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="flex items-center gap-2 text-xs text-[#555d70] hover:text-black font-bold">
-              <span className="grid h-7 w-7 place-items-center rounded-lg bg-black text-[10px] font-black text-white">
-                &larr;
-              </span>
-              <span className="hidden sm:inline">Back</span>
-            </Link>
-            <span style={{ color: "var(--border-bright)" }} className="hidden sm:inline">/</span>
-            <span className="font-black tracking-tight text-sm sm:text-base">{app.name}</span>
-            <span className="badge badge-purple">{app.config.entity}</span>
+        {/* Back to dashboard */}
+        <div className="sidebar-section" style={{ paddingTop: 8, paddingBottom: 4 }}>
+          <Link href="/dashboard" className="sidebar-link">
+            <svg className="sidebar-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7" />
+            </svg>
+            Back to Dashboard
+          </Link>
+        </div>
+
+        {/* App info */}
+        <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border-dark)", borderBottom: "1px solid var(--border-dark)" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-sidebar-muted)", marginBottom: 6 }}>Current App</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "rgba(255,255,255,0.9)", letterSpacing: -0.2, lineHeight: 1.2 }}>{app.name}</div>
+          <div style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
+            <span className="badge badge-purple" style={{ fontSize: 10 }}>{app.config.entity}</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-sidebar-muted)" }}>{records.length} records</span>
           </div>
+        </div>
 
-          <nav className="flex items-center gap-4 text-xs font-bold text-[#555d70] sm:gap-7">
-            <button
-              onClick={() => setView("table")}
-              className={`spark-nav-tab py-1 cursor-pointer ${view === "table" || view === "new" || view === "edit" ? "active" : ""}`}
-            >
-              Records
-            </button>
-            <button
-              onClick={() => setView("config")}
-              className={`spark-nav-tab py-1 cursor-pointer ${view === "config" ? "active" : ""}`}
-            >
-              Schema Config
-            </button>
-            <button
-              onClick={() => setView("github")}
-              className={`spark-nav-tab py-1 cursor-pointer ${view === "github" ? "active" : ""}`}
-            >
-              GitHub Export
-            </button>
-          </nav>
+        {/* View Navigation */}
+        <div className="sidebar-section" style={{ marginTop: 4 }}>
+          <p className="sidebar-section-label">Views</p>
+          <button
+            onClick={() => setView("table")}
+            className={`sidebar-link ${(view === "table" || view === "new" || view === "edit") ? "active" : ""}`}
+          >
+            <svg className="sidebar-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+            Records Table
+          </button>
+          <button
+            onClick={() => setView("config")}
+            className={`sidebar-link ${view === "config" ? "active" : ""}`}
+          >
+            <svg className="sidebar-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
+            </svg>
+            Schema Config
+          </button>
+          <button
+            onClick={() => setView("github")}
+            className={`sidebar-link ${view === "github" ? "active" : ""}`}
+          >
+            <svg className="sidebar-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+            </svg>
+            GitHub Export
+          </button>
+        </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-bold text-slate-400 uppercase hidden md:inline">
-              {records.length} records active
-            </span>
-            <button
-              onClick={() => {
-                setView("new");
-                setEditing(null);
-              }}
-              className="btn-primary glow-btn-primary py-1.5 px-3 text-[11px] font-bold"
-            >
-              + Add Record
-            </button>
-          </div>
-        </header>
+        {/* Add record shortcut */}
+        <div style={{ padding: "8px 12px" }}>
+          <button
+            onClick={() => { setView("new"); setEditing(null); }}
+            className="btn-primary glow-btn-primary"
+            style={{ width: "100%", fontSize: 12, padding: "9px 12px", borderRadius: 10, justifyContent: "center" }}
+          >
+            + Add Record
+          </button>
+        </div>
 
-        {/* Workspace views content */}
-        <div className="relative z-20 mx-auto max-w-7xl px-4 py-8 sm:px-6">
-          {view === "table" && (
-            <div className="space-y-6 animate-fade-in">
-              <div className="flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center">
-                <div>
-                  <h2 className="text-xl font-black tracking-tight">Active records list</h2>
-                  <p className="text-xs font-medium text-[#6d7484] mt-0.5">
-                    Live dynamic CRUD rows matched against schema types.
-                  </p>
+        {/* Field type summary */}
+        {app.config.fields.length > 0 && (
+          <div style={{ padding: "12px 20px" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-sidebar-muted)", marginBottom: 8 }}>Schema Fields</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {app.config.fields.map((f) => (
+                <div key={f.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0" }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.65)", fontFamily: "var(--font-mono), monospace" }}>{f.name}</span>
+                  <span className={`badge ${TYPE_COLORS[f.type]}`} style={{ fontSize: 9 }}>{f.type}</span>
                 </div>
-                <div className="flex gap-2 items-center">
+              ))}
+            </div>
+          </div>
+        )}
+      </aside>
+
+      {/* ─── MAIN CONTENT ─────────────────────────────────────────────────────────── */}
+      <div className="main-content">
+          {view === "table" && (
+            <div className="animate-fade-in">
+              <div className="page-header">
+                <div>
+                  <h1 className="font-serif text-2xl font-normal italic text-slate-800">Active records</h1>
+                  <p className="text-xs font-medium text-slate-400 mt-0.5">Live CRUD rows matched against schema types</p>
+                </div>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <input
                     type="text"
                     placeholder="Search in fields..."
-                    className="input py-1.5 px-3 max-w-56 text-xs"
+                    className="input"
+                    style={{ maxWidth: 220, padding: "8px 14px", fontSize: 12 }}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                   {searchQuery && (
-                    <button onClick={() => setSearchQuery("")} className="btn-ghost text-xs py-1.5 px-2.5">
-                      Clear
-                    </button>
+                    <button onClick={() => setSearchQuery("")} className="btn-ghost text-xs py-1.5 px-2.5">Clear</button>
                   )}
                 </div>
               </div>
+              <div className="page-content">
 
               {records.length === 0 ? (
                 <div className="text-center py-20 bg-white rounded-xl border border-slate-200">
@@ -1006,19 +1037,21 @@ body {
                   </div>
                 </div>
               )}
+              </div>
             </div>
           )}
 
           {(view === "new" || view === "edit") && (
-            <div className="max-w-xl mx-auto animate-fade-in">
-              <div className="mb-6">
-                <h2 className="text-xl font-black tracking-tight">
-                  {view === "edit" ? `Edit ${app.config.entity}` : `Add new ${app.config.entity}`}
-                </h2>
-                <p className="text-xs font-medium text-[#6d7484] mt-0.5">
-                  Fields are auto-compiled from schema configurations.
-                </p>
+            <div className="animate-fade-in">
+              <div className="page-header">
+                <div>
+                  <h1 className="font-serif text-2xl font-normal italic text-slate-800">
+                    {view === "edit" ? `Edit ${app.config.entity}` : `Add new ${app.config.entity}`}
+                  </h1>
+                  <p className="text-xs font-medium text-slate-400 mt-0.5">Fields are auto-compiled from schema configurations.</p>
+                </div>
               </div>
+              <div className="page-content" style={{ maxWidth: 560 }}>
               <div className="card p-6 bg-white border border-slate-200 shadow-sm">
                 <RecordForm
                   config={app.config}
@@ -1031,60 +1064,84 @@ body {
                   saving={saving}
                 />
               </div>
+              </div>
             </div>
           )}
 
           {view === "config" && (
-            <div className="animate-fade-in space-y-6">
-              <div>
-                <h2 className="text-xl font-black tracking-tight">Database Schema Config</h2>
-                <p className="text-xs font-medium text-[#6d7484] mt-0.5">
-                  AppForge compiles data structures dynamically. Edits automatically save version histories below.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="field-label">JSON CONFIG RAW</span>
-                    {configErr && (
-                      <span className="badge badge-red font-bold">{configErr}</span>
+            <div className="animate-fade-in">
+              <div className="page-header">
+                <div>
+                  <h1 className="font-serif text-2xl font-normal italic text-slate-800">Schema Config Editor</h1>
+                  <p className="text-xs font-medium text-slate-400 mt-0.5">Edits automatically save version histories</p>
+                </div>
+                <div>
+                  <button
+                    onClick={() => handleConfigSave()}
+                    disabled={updating}
+                    className="frixion-btn px-6 py-2.5 text-xs font-bold gap-2"
+                  >
+                    {updating && (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     )}
-                  </div>
-                  <textarea
-                    className="code-area h-[420px] font-mono text-xs p-4 bg-white"
-                    value={configText}
-                    onChange={(e) => setConfigText(e.target.value)}
-                  />
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={() => setView("table")}
-                      className="btn-ghost text-xs"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => handleConfigSave()}
-                      disabled={updating}
-                      className="btn-primary glow-btn-primary gap-2 text-xs font-bold"
-                    >
-                      {updating && (
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    {updating ? "Saving schema..." : "⚡ Save Config & Compile"}
+                  </button>
+                </div>
+              </div>
+              <div className="page-content">
+
+              {/* Split-Pane Glass Canvas */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Left Pane: The Forge Code Editor */}
+                <div className="warm-gradient-bg rounded-[20px] p-6 shadow-[0_12px_40px_rgba(226,178,142,0.12)] border border-[#e8d2c0] flex flex-col min-h-[450px]">
+                  <div className="editor-glass-card rounded-2xl p-5 flex-1 flex flex-col space-y-4">
+                    <div className="flex items-center justify-between border-b border-white/40 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#d88a5c]" />
+                        <span className="font-mono text-xs font-bold text-[#7b4c2d] uppercase tracking-wider">config.json</span>
+                      </div>
+                      
+                      {configErr ? (
+                        <span className="badge badge-red text-[10px]">✗ ERROR</span>
+                      ) : (
+                        <span className="badge badge-green text-[10px]">✓ COMPILED</span>
                       )}
-                      {updating ? "Saving schema..." : "Save Config & Compile"}
-                    </button>
+                    </div>
+
+                    <textarea
+                      className="frixion-textarea flex-1 p-4 font-mono text-xs w-full bg-white/70 backdrop-blur min-h-[280px]"
+                      value={configText}
+                      onChange={(e) => setConfigText(e.target.value)}
+                    />
+                    
+                    {configErr && (
+                      <div className="text-[11px] text-[#b52d2d] font-semibold bg-red-50/70 p-2.5 rounded-lg border border-red-150">
+                        <strong>Error:</strong> {configErr}
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        onClick={() => setView("table")}
+                        className="frixion-btn-secondary text-xs px-4 py-2"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-6">
+                {/* Right Pane: Live Compilations & Versions */}
+                <div className="space-y-6 flex flex-col">
                   {/* Fields list */}
-                  <div className="bg-slate-50 border p-4 rounded-xl">
+                  <div className="card bg-white p-5 border border-slate-200 shadow-sm">
                     <span className="field-label mb-3">COMPILED SCHEMAS</span>
                     <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                       {app.config.fields.map((f) => (
                         <div
                           key={f.name}
-                          className="bg-white border rounded-lg p-2.5 flex items-center justify-between"
+                          className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex items-center justify-between hover:bg-slate-100 transition"
                         >
                           <span className="text-xs font-bold text-slate-700">{f.name}</span>
                           <div className="flex gap-1 items-center">
@@ -1101,17 +1158,17 @@ body {
                   </div>
 
                   {/* Versions history list */}
-                  <div className="bg-slate-50 border p-4 rounded-xl">
+                  <div className="card bg-white p-5 border border-slate-200 shadow-sm flex-1">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="field-label">VERSION LOGS</span>
+                      <span className="field-label">VERSION HISTORY LOGS</span>
                       <span className="badge badge-purple">{app.versions.length} versions</span>
                     </div>
-                    <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
                       {app.versions.map((v) => (
                         <button
                           key={v.id}
                           onClick={() => setSelectedHistoryVersion(v)}
-                          className="w-full flex items-center justify-between p-2.5 rounded-lg border bg-white hover:bg-slate-50 transition cursor-pointer text-left"
+                          className="w-full flex items-center justify-between p-2.5 rounded-xl border bg-slate-50 hover:bg-slate-100 transition cursor-pointer text-left"
                         >
                           <span className="text-xs font-black text-slate-800">
                             Version #{v.version}
@@ -1124,18 +1181,21 @@ body {
                     </div>
                   </div>
                 </div>
+
+              </div>
               </div>
             </div>
           )}
 
           {view === "github" && (
-            <div className="max-w-3xl mx-auto animate-fade-in space-y-6">
-              <div>
-                <h2 className="text-xl font-black tracking-tight">GitHub Exporter (Compile standalone app)</h2>
-                <p className="text-xs font-medium text-[#6d7484] mt-0.5">
-                  AppForge reverse-compiles your config and records into a working, standalone Next.js repo that saves/edits records inside browser local storage. Fully hostable on Vercel out-of-the-box!
-                </p>
+            <div className="animate-fade-in">
+              <div className="page-header">
+                <div>
+                  <h1 className="font-serif text-2xl font-normal italic text-slate-800">GitHub Exporter</h1>
+                  <p className="text-xs font-medium text-slate-400 mt-0.5">Export your schema & records as a standalone Next.js repo</p>
+                </div>
               </div>
+              <div className="page-content">
 
               <div className="grid gap-6 md:grid-cols-3">
                 <div className="md:col-span-2 card p-6 bg-white border border-slate-200 shadow-sm space-y-4">
@@ -1236,18 +1296,18 @@ body {
                   </div>
                 </div>
               </div>
+              </div>
             </div>
           )}
         </div>
-      </section>
 
-      {/* Version Comparison / Preview Modal */}
+      {/* Version Comparison Modal — fixed overlay inside sidebar-shell */}
       {selectedHistoryVersion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm font-sans">
           <div className="card w-full max-w-3xl animate-fade-up overflow-hidden bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#edf0f4] p-6 bg-slate-50">
               <div>
-                <h2 className="text-xl font-black tracking-tight">Compare Config Version #{selectedHistoryVersion.version}</h2>
+                <h1 className="font-serif text-2xl font-normal tracking-tight text-[#07090f] italic">Compare Config Version #{selectedHistoryVersion.version}</h1>
                 <p className="text-xs font-medium text-[#6d7484]">
                   Compare schema definition saved on {new Date(selectedHistoryVersion.createdAt).toLocaleString()}.
                 </p>
@@ -1289,6 +1349,6 @@ body {
           </div>
         </div>
       )}
-    </main>
+      </div>
   );
 }
