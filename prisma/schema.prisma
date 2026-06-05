@@ -15,10 +15,9 @@ model User {
   image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-
-  accounts Account[]
-  sessions Session[]
-  apps     App[]
+  accounts      Account[]
+  apps          App[]
+  sessions      Session[]
 }
 
 model Account {
@@ -27,15 +26,14 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -45,8 +43,7 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
@@ -58,17 +55,16 @@ model VerificationToken {
 }
 
 model App {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   name        String
   description String?
   config      Json
   userId      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  records AppRecord[]
-  versions AppVersion[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  records     AppRecord[]
+  versions    AppVersion[]
 
   @@index([userId])
 }
@@ -80,8 +76,7 @@ model AppRecord {
   data      Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+  app       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
 
   @@index([appId, entity])
 }
@@ -92,8 +87,7 @@ model AppVersion {
   version   Int
   config    Json
   createdAt DateTime @default(now())
-
-  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+  app       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
 
   @@index([appId])
 }
