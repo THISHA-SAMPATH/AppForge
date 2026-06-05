@@ -70,6 +70,47 @@ export async function POST(request: NextRequest, { params }: Params) {
     const validation = validateConfig(app.config);
     const config: AppConfig = validation.config;
 
+    // Check if body is an array for bulk insertion (e.g. from CSV import)
+    if (Array.isArray(body)) {
+      const recordsToCreate = [];
+      for (const item of body) {
+        const sanitizedData: Record<string, Prisma.InputJsonValue> = {};
+        for (const field of config.fields) {
+          const value = item[field.name];
+          if (
+            field.required &&
+            (value === undefined || value === null || value === "")
+          ) {
+            return NextResponse.json<ApiResponse>(
+              { success: false, error: `Field "${field.name}" is required on a bulk item` },
+              { status: 400 },
+            );
+          }
+          sanitizedData[field.name] = (value ??
+            field.defaultValue ??
+            null) as Prisma.InputJsonValue;
+        }
+        recordsToCreate.push({
+          appId,
+          entity,
+          data: sanitizedData as Prisma.InputJsonObject,
+        });
+      }
+
+      // Use createMany for bulk database insertion
+      await prisma.appRecord.createMany({
+        data: recordsToCreate,
+      });
+
+      return NextResponse.json<ApiResponse>(
+        {
+          success: true,
+          data: { count: recordsToCreate.length },
+        },
+        { status: 201 },
+      );
+    }
+
     // Build as a plain mutable object, cast to InputJsonObject only when passing to Prisma
     const sanitizedData: Record<string, Prisma.InputJsonValue> = {};
 

@@ -1,91 +1,161 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import type { CSSProperties } from "react";
 import { useState } from "react";
+
+const tiles = [
+  {
+    label: "JSON",
+    mark: "{}",
+    className: "left-[5%] bottom-[24%] w-36 h-24 md:w-44 md:h-28",
+    color: "text-[#ff2f92]",
+    delay: "0s",
+    tilt: "-8deg",
+  },
+  {
+    label: "Schema",
+    mark: "|||",
+    className: "left-[24%] bottom-[12%] w-40 h-24 md:w-52 md:h-28",
+    color: "text-[#ffd32a]",
+    delay: "0.35s",
+    tilt: "5deg",
+  },
+  {
+    label: "Builder",
+    mark: "AF",
+    className: "left-1/2 -translate-x-1/2 bottom-[5%] w-36 h-24 md:w-44 md:h-28",
+    color: "text-[#ff2f92]",
+    delay: "0.7s",
+    tilt: "-3deg",
+  },
+  {
+    label: "Records",
+    mark: "M",
+    className: "right-[18%] bottom-[18%] w-40 h-24 md:w-52 md:h-28",
+    color: "text-[#1f7aff]",
+    delay: "1.05s",
+    tilt: "8deg",
+  },
+  {
+    label: "Deploy",
+    mark: "DB",
+    className: "right-[5%] bottom-[30%] w-36 h-24 md:w-44 md:h-28",
+    color: "text-[#ffd32a]",
+    delay: "1.4s",
+    tilt: "-5deg",
+  },
+];
 
 export default function LoginPage() {
   const [loading, setLoading] = useState<string | null>(null);
 
   const handleSignIn = async (provider: "google" | "github") => {
     setLoading(provider);
-    await signIn(provider, { callbackUrl: "/dashboard" });
+    await signIn(provider, { redirectTo: "/dashboard" });
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600 rounded-2xl mb-4">
-            <span className="text-2xl font-bold text-white">AF</span>
+    <main className="min-h-screen overflow-x-hidden bg-[#d9dde3] p-3 text-[#07090f] sm:p-5">
+      <section className="relative min-h-[calc(100vh-24px)] overflow-hidden rounded-[22px] border-[10px] border-white bg-[#fbfbfc] shadow-[0_18px_55px_rgba(15,23,42,0.12)] sm:min-h-[calc(100vh-40px)] sm:border-[14px]">
+        <div className="absolute inset-4 rounded-[18px] border border-[#e7e9ee]" />
+
+        <header
+          className="relative z-20 mx-auto mt-8 flex h-12 items-center justify-between gap-2 rounded-2xl px-2 spark-nav sm:px-3"
+          style={{ width: "calc(100% - 20px)", maxWidth: 720 }}
+        >
+          <div className="flex items-center gap-2 font-black">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-black text-xs text-white">
+              AF
+            </span>
+            <span>AppForge</span>
           </div>
-          <h1 className="text-4xl font-bold text-white">AppForge</h1>
-          <p className="text-gray-400 mt-2 text-sm">
-            Turn JSON config into a working app — instantly
-          </p>
-        </div>
-
-        {/* Card */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-xl font-semibold text-white mb-2">
-            Welcome back
-          </h2>
-          <p className="text-gray-400 text-sm mb-8">
-            Sign in to access your AppForge workspace
-          </p>
-
-          {/* Google Button */}
-          <button
-            onClick={() => handleSignIn("google")}
-            disabled={!!loading}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-medium py-3 px-4 rounded-xl transition-all duration-200 mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading === "google" ? (
-              <div className="w-5 h-5 border-2 border-gray-400 border-t-gray-900 rounded-full animate-spin" />
-            ) : (
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                />
-              </svg>
-            )}
-            {loading === "google" ? "Signing in..." : "Continue with Google"}
-          </button>
-
-          {/* GitHub Button */}
+          <nav className="hidden items-center gap-7 text-xs font-semibold text-[#232633] md:flex">
+            <span>Platform</span>
+            <span>Product</span>
+            <span>Templates</span>
+            <span>Data</span>
+          </nav>
           <button
             onClick={() => handleSignIn("github")}
             disabled={!!loading}
-            className="w-full flex items-center justify-center gap-3 bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-700"
+            className="rounded-xl bg-black px-4 py-2 text-xs font-bold text-white shadow-[0_10px_22px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 disabled:opacity-60 sm:px-5"
           >
-            {loading === "github" ? (
-              <div className="w-5 h-5 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
-            ) : (
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-              </svg>
-            )}
-            {loading === "github" ? "Signing in..." : "Continue with GitHub"}
+            <span className="sm:hidden">
+              {loading === "github" ? "..." : "Try"}
+            </span>
+            <span className="hidden sm:inline">
+              {loading === "github" ? "Opening..." : "Try AppForge"}
+            </span>
           </button>
+        </header>
 
-          <p className="text-center text-gray-600 text-xs mt-6">
-            By signing in, you agree to build amazing things.
+        <div className="relative z-10 mx-auto mt-16 max-w-4xl px-4 text-center sm:mt-20 sm:px-5">
+          <p className="mx-auto mb-5 w-fit rounded-full border border-[#e4e7ee] bg-white px-4 py-2 text-xs font-bold text-[#555d70] shadow-sm">
+            Build database apps from config, not boilerplate
           </p>
+          <h1 className="mx-auto max-w-4xl text-[clamp(3rem,8vw,6.4rem)] font-black leading-[0.92] tracking-normal">
+            Your data.
+            <br />
+            Your app.
+            <br />
+            <span className="highlight-mark">Your AI.</span>
+          </h1>
+          <p className="mx-auto mt-7 max-w-xl text-sm font-medium leading-6 text-[#5f6677] sm:text-base">
+            Turn a JSON schema into a working workspace with records, forms, and
+            generated app views in minutes.
+          </p>
+
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <button
+              onClick={() => handleSignIn("google")}
+              disabled={!!loading}
+              className="btn-primary min-w-48 gap-2 px-6 py-3"
+            >
+              <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-xs font-black text-[#1f7aff]">
+                G
+              </span>
+              {loading === "google" ? "Signing in..." : "Continue with Google"}
+            </button>
+            <button
+              onClick={() => handleSignIn("github")}
+              disabled={!!loading}
+              className="btn-ghost min-w-48 gap-2 px-6 py-3"
+            >
+              <span className="grid h-5 w-5 place-items-center rounded-full bg-black text-xs font-black text-white">
+                GH
+              </span>
+              {loading === "github" ? "Signing in..." : "Continue with GitHub"}
+            </button>
+          </div>
         </div>
-      </div>
-    </div>
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-[45%] md:block">
+          {tiles.map((tile) => (
+            <div
+              key={tile.label}
+              className={`floating-tile absolute grid place-items-center rounded-[8px] ${tile.className}`}
+              style={
+                {
+                  animationDelay: tile.delay,
+                  "--tilt": tile.tilt,
+                } as CSSProperties
+              }
+            >
+              <div className="grid place-items-center gap-2">
+                <div
+                  className={`grid h-12 w-12 place-items-center rounded-[8px] bg-white text-lg font-black shadow-[0_12px_25px_rgba(15,23,42,0.12)] ${tile.color}`}
+                >
+                  {tile.mark}
+                </div>
+                <span className="text-xs font-bold text-[#8a91a3]">
+                  {tile.label}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </main>
   );
 }
