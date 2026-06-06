@@ -167,6 +167,7 @@ export default function DashboardPage() {
   const [showCmdPalette, setShowCmdPalette] = useState(false);
   const [cmdSearch, setCmdSearch] = useState("");
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [cloningAppId, setCloningAppId] = useState<string | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const inferredConfig = assistantPrompt.trim() ? parseDescriptionToConfig(assistantPrompt) : null;
   const promptChars = assistantPrompt.length;
@@ -180,19 +181,25 @@ export default function DashboardPage() {
     }, 3200);
   }, []);
 
+  const loadApps = useCallback(async (cancelled?: () => boolean) => {
+    try {
+      const r = await fetch("/api/apps");
+      const d = await r.json();
+      if (cancelled?.()) return;
+      if (d.success) setApps(d.data);
+      else notify("error", d.error || "Could not load recent runtimes.");
+    } catch {
+      if (!cancelled?.()) notify("error", "Could not load recent runtimes.");
+    } finally {
+      if (!cancelled?.()) setLoading(false);
+    }
+  }, [notify]);
+
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/apps")
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return;
-        if (d.success) setApps(d.data);
-        else notify("error", d.error || "Could not load recent runtimes.");
-      })
-      .catch(() => {
-        if (!cancelled) notify("error", "Could not load recent runtimes.");
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    queueMicrotask(() => {
+      void loadApps(() => cancelled);
+    });
 
     // Click outside handler for profile menu
     const handleClickOutside = (event: MouseEvent) => {
@@ -219,7 +226,7 @@ export default function DashboardPage() {
       document.removeEventListener("mousedown", handleClickOutside);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [notify]);
+  }, [loadApps]);
 
   const handleForgeAssistant = (promptText = assistantPrompt) => {
     if (!promptText.trim()) return;
@@ -241,9 +248,37 @@ export default function DashboardPage() {
     }
   };
 
+  const handleCloneApp = async (app: App) => {
+    setCloningAppId(app.id);
+    try {
+      const response = await fetch("/api/apps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `${app.name} Copy`,
+          description: app.description,
+          config: app.config,
+        }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || "Could not duplicate runtime.");
+      }
+      const clonedApp: App = {
+        ...data.data.app,
+        _count: { records: 0 },
+      };
+      setApps((current) => [clonedApp, ...current]);
+      notify("success", `Duplicated ${app.name}.`);
+    } catch (e: unknown) {
+      notify("error", e instanceof Error ? e.message : "Could not duplicate runtime.");
+    } finally {
+      setCloningAppId(null);
+    }
+  };
+
   const filteredCmdApps = apps.filter((app) =>
-    app.name.toLowerCase().includes(cmdSearch.toLowerCase()) ||
-    app.config.entity.toLowerCase().includes(cmdSearch.toLowerCase())
+    app.name.toLowerCase().includes(cmdSearch.toLowerCase())
   );
 
   const initials = session?.user?.name?.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "AF";
@@ -551,41 +586,51 @@ export default function DashboardPage() {
                 const theme = getAppTheme(app.name, app.config.entity);
                 const isError = app.name.toLowerCase().includes("error") || app.name.toLowerCase().includes("fail") || app.description?.toLowerCase().includes("error");
                 return (
-                  <Link key={app.id} href={`/apps/${app.id}`} className="runtime-grid-card p-4.5 flex items-center justify-between text-decoration-none group">
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className={`w-11 h-11 rounded-xl ${theme.iconBg} flex items-center justify-center shrink-0`}>
-                        {theme.icon}
+                  <div key={app.id} className="runtime-grid-card p-4.5 flex flex-col justify-between gap-3 group">
+                    <Link href={`/apps/${app.id}`} className="flex items-start justify-between gap-3 text-decoration-none">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className={`w-11 h-11 rounded-xl ${theme.iconBg} flex items-center justify-center shrink-0`}>
+                          {theme.icon}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-extrabold text-sm text-slate-800 m-0 line-clamp-1 leading-tight group-hover:text-[#e26e38] transition-colors">
+                            {app.name}
+                          </h4>
+                          <p className="text-[10px] font-semibold text-slate-400 mt-1 mb-0.5">
+                            {app._count.records} {app._count.records === 1 ? "record" : "records"} · {getRelativeTime(app.updatedAt)}
+                          </p>
+                          {isError ? (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                              <span className="text-[9px] font-extrabold text-red-650 uppercase tracking-wider">Error</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider">Running</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <h4 className="font-extrabold text-sm text-slate-800 m-0 line-clamp-1 leading-tight group-hover:text-[#e26e38] transition-colors">
-                          {app.name}
-                        </h4>
-                        <p className="text-[10px] font-semibold text-slate-400 mt-1 mb-0.5">
-                          {getRelativeTime(app.updatedAt)}
-                        </p>
-                        {isError ? (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                            <span className="text-[9px] font-extrabold text-red-650 uppercase tracking-wider">Error</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider">Running</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-slate-350 group-hover:text-slate-700 group-hover:translate-x-0.5 transition-all text-lg pl-2 font-bold select-none">&rarr;</span>
-                  </Link>
+                      <span className="text-slate-350 group-hover:text-slate-700 group-hover:translate-x-0.5 transition-all text-lg pl-2 font-bold select-none">&rarr;</span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleCloneApp(app)}
+                      disabled={cloningAppId === app.id}
+                      className="w-full rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-600 transition hover:border-[#7c6ef5]/30 hover:text-[#7c6ef5] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {cloningAppId === app.id ? "Cloning..." : "Clone this runtime"}
+                    </button>
+                  </div>
                 );
               })}
               
               {/* Render placeholders if user doesn't have 3 apps yet */}
               {apps.length < 3 && [
-                { id: "mock-1", name: "Inventory Manager", entity: "Product", updatedAt: new Date(Date.now() - 120000).toISOString(), status: "running" },
-                { id: "mock-2", name: "Task Tracker", entity: "Task", updatedAt: new Date(Date.now() - 3600000).toISOString(), status: "running" },
-                { id: "mock-3", name: "Contact Book", entity: "Contact", updatedAt: new Date(Date.now() - 10800000).toISOString(), status: "error" }
+                { id: "mock-1", name: "Inventory Manager", entity: "Product", updatedLabel: "Updated 2 mins ago", status: "running" },
+                { id: "mock-2", name: "Task Tracker", entity: "Task", updatedLabel: "Updated 1 hour ago", status: "running" },
+                { id: "mock-3", name: "Contact Book", entity: "Contact", updatedLabel: "Updated 3 hours ago", status: "error" }
               ].slice(apps.length).map((mock) => {
                 const theme = getAppTheme(mock.name, mock.entity);
                 const isError = mock.status === "error";
@@ -607,7 +652,7 @@ export default function DashboardPage() {
                           {mock.name}
                         </h4>
                         <p className="text-[10px] font-semibold text-slate-400 mt-1 mb-0.5">
-                          {getRelativeTime(mock.updatedAt)}
+                          {mock.updatedLabel}
                         </p>
                         {isError ? (
                           <div className="flex items-center gap-1 mt-0.5">
@@ -648,7 +693,7 @@ export default function DashboardPage() {
           <div className="cmd-palette-content" onClick={(e) => e.stopPropagation()}>
             <input
               type="text"
-              placeholder="Search apps by name or entity..."
+              placeholder="Search runtimes by name..."
               className="cmd-input font-semibold"
               autoFocus
               value={cmdSearch}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
@@ -36,6 +36,13 @@ type FieldDiff = {
   after?: FieldConfig;
   changes: string[];
 };
+
+type SortDirection = "asc" | "desc";
+type SortState = {
+  key: string;
+  type: string;
+  direction: SortDirection;
+} | null;
 
 function fieldSignature(field: FieldConfig | undefined) {
   if (!field) return "";
@@ -371,6 +378,10 @@ export default function AppPage() {
   const [configErr, setConfigErr] = useState("");
   const [updating, setUpdating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortState, setSortState] = useState<SortState>(null);
+  const [enumFilters, setEnumFilters] = useState<Record<string, string>>({});
+  const [showCmdPalette, setShowCmdPalette] = useState(false);
+  const [cmdSearch, setCmdSearch] = useState("");
 
   // UI state
   const [showSwitcherDropdown, setShowSwitcherDropdown] = useState(false);
@@ -456,9 +467,21 @@ export default function AppPage() {
     };
     document.addEventListener("mousedown", handleClickOutside);
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setShowCmdPalette((current) => !current);
+      }
+      if (event.key === "Escape") {
+        setShowCmdPalette(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
     return () => {
       cancelled = true;
       document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [loadApp, loadAllApps]);
 
@@ -681,13 +704,95 @@ export default function AppPage() {
     return <span>{String(value)}</span>;
   };
 
-  const filteredRecords = records.filter((rec) => {
-    if (!searchQuery) return true;
-    return app?.config.fields.some((f) => {
-      const val = rec[f.name];
-      return val && String(val).toLowerCase().includes(searchQuery.toLowerCase());
+  const toggleSort = (key: string, type: string) => {
+    setSortState((current) => {
+      if (!current || current.key !== key) return { key, type, direction: "asc" };
+      if (current.direction === "asc") return { key, type, direction: "desc" };
+      return null;
     });
-  });
+  };
+
+  const getSortableValue = useCallback((value: unknown, type: string) => {
+    if (value === null || value === undefined || value === "") return null;
+    if (type === "number") return Number(value);
+    if (type === "date") return new Date(String(value)).getTime();
+    if (type === "boolean") return Boolean(value) ? 1 : 0;
+    return String(value).toLowerCase();
+  }, []);
+
+  const compareRecords = useCallback((a: AppRecord, b: AppRecord, sort: NonNullable<SortState>) => {
+    const aValue = getSortableValue(a[sort.key], sort.type);
+    const bValue = getSortableValue(b[sort.key], sort.type);
+    if (aValue === null && bValue === null) return 0;
+    if (aValue === null) return 1;
+    if (bValue === null) return -1;
+    if (aValue < bValue) return sort.direction === "asc" ? -1 : 1;
+    if (aValue > bValue) return sort.direction === "asc" ? 1 : -1;
+    return 0;
+  }, [getSortableValue]);
+
+  const enumFieldFilters = useMemo(
+    () => app?.config.fields.filter((field) => field.type === "enum" && field.options?.length) ?? [],
+    [app?.config],
+  );
+  const activeFilterCount = Object.values(enumFilters).filter(Boolean).length;
+  const filteredCmdApps = allApps.filter((runtime) =>
+    runtime.name.toLowerCase().includes(cmdSearch.trim().toLowerCase())
+  );
+
+  const filteredRecords = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const visible = records.filter((rec) => {
+      const matchesSearch = !query || app?.config.fields.some((f) => {
+        const val = rec[f.name];
+        return val !== null && val !== undefined && String(val).toLowerCase().includes(query);
+      });
+      if (!matchesSearch) return false;
+
+      return Object.entries(enumFilters).every(([fieldName, selectedValue]) => {
+        if (!selectedValue) return true;
+        return String(rec[fieldName] ?? "") === selectedValue;
+      });
+    });
+
+    if (!sortState) return visible;
+    return [...visible].sort((a, b) => compareRecords(a, b, sortState));
+  }, [app?.config, compareRecords, enumFilters, records, searchQuery, sortState]);
+
+  const recordStats = useMemo(() => {
+    const totalRecords = records.length;
+    const newestCreatedAt = records.reduce<Date | null>((newest, record) => {
+      const created = new Date(record.createdAt);
+      if (Number.isNaN(created.getTime())) return newest;
+      if (!newest || created.getTime() > newest.getTime()) return created;
+      return newest;
+    }, null);
+
+    const enumCounts = new Map<string, { fieldName: string; value: string; count: number }>();
+    enumFieldFilters.forEach((field) => {
+      records.forEach((record) => {
+        const rawValue = record[field.name];
+        if (rawValue === null || rawValue === undefined || rawValue === "") return;
+        const value = String(rawValue);
+        const key = `${field.name}:${value}`;
+        const current = enumCounts.get(key);
+        enumCounts.set(key, {
+          fieldName: field.name,
+          value,
+          count: (current?.count || 0) + 1,
+        });
+      });
+    });
+
+    const topEnum = Array.from(enumCounts.values()).sort((a, b) => b.count - a.count)[0] || null;
+
+    return {
+      totalRecords,
+      lastAddedLabel: newestCreatedAt ? newestCreatedAt.toLocaleDateString() : "No records yet",
+      topEnumLabel: topEnum ? `${topEnum.fieldName}: ${topEnum.value}` : "No enum data",
+      topEnumCount: topEnum?.count || 0,
+    };
+  }, [enumFieldFilters, records]);
 
   const appUrl = typeof window !== "undefined" ? window.location.origin + "/apps/" + appId : "";
 
@@ -787,6 +892,14 @@ export default function AppPage() {
         {/* Right Action buttons */}
         <div className="flex items-center gap-2">
           <button
+            type="button"
+            onClick={() => setShowCmdPalette(true)}
+            className="text-xs font-bold text-slate-500 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer transition flex items-center gap-2"
+          >
+            <span>Search</span>
+            <span className="text-[10px] text-slate-350 font-mono">Ctrl + K</span>
+          </button>
+          <button
             onClick={() => setShowPwaModal(true)}
             className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border-none cursor-pointer transition flex items-center gap-1"
           >
@@ -808,7 +921,7 @@ export default function AppPage() {
                 <h1 className="font-serif text-3xl font-normal italic text-slate-800 tracking-tight">Active records</h1>
                 <p className="text-xs font-medium text-slate-400 mt-1">Live CRUD rows parsed against schema validators</p>
               </div>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <input
                   type="text"
                   placeholder="Search records..."
@@ -817,12 +930,66 @@ export default function AppPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
+                {enumFieldFilters.map((field) => (
+                  <select
+                    key={field.name}
+                    className="select"
+                    value={enumFilters[field.name] || ""}
+                    onChange={(event) =>
+                      setEnumFilters((current) => ({
+                        ...current,
+                        [field.name]: event.target.value,
+                      }))
+                    }
+                    style={{ maxWidth: 170, padding: "8px 12px", fontSize: 12 }}
+                  >
+                    <option value="">All {field.name}</option>
+                    {field.options?.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                ))}
+                {(searchQuery || activeFilterCount > 0 || sortState) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setEnumFilters({});
+                      setSortState(null);
+                    }}
+                    className="btn-ghost text-xs py-2 px-3 font-bold"
+                  >
+                    Reset
+                  </button>
+                )}
                 <button
                   onClick={() => { setView("new"); setEditing(null); }}
                   className="btn-primary glow-btn-primary text-xs py-2 px-4 font-bold"
                 >
                   + Add Record
                 </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 overflow-hidden rounded-xl border border-slate-200 bg-white/80 shadow-sm sm:grid-cols-3">
+              <div className="border-b border-slate-100 px-4 py-3 sm:border-b-0 sm:border-r">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Records</div>
+                <div className="mt-1 text-2xl font-black leading-none text-slate-850">{recordStats.totalRecords}</div>
+              </div>
+              <div className="border-b border-slate-100 px-4 py-3 sm:border-b-0 sm:border-r">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Last Added</div>
+                <div className="mt-1 truncate text-sm font-extrabold text-slate-750">{recordStats.lastAddedLabel}</div>
+              </div>
+              <div className="px-4 py-3">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Top Enum Value</div>
+                <div className="mt-1 flex min-w-0 items-center gap-2">
+                  <span className="truncate text-sm font-extrabold text-slate-750">{recordStats.topEnumLabel}</span>
+                  {recordStats.topEnumCount > 0 && (
+                    <span className="badge badge-purple shrink-0 text-[9px]">{recordStats.topEnumCount} rows</span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -864,7 +1031,7 @@ export default function AppPage() {
             ) : filteredRecords.length === 0 ? (
               <div className="text-center py-16 bg-white/70 backdrop-blur border border-slate-200 rounded-2xl">
                 <h3 className="text-base font-extrabold text-slate-700">No matching records</h3>
-                <p className="text-xs font-semibold text-slate-400 mt-1">Clear the search to return to all rows.</p>
+                <p className="text-xs font-semibold text-slate-400 mt-1">Clear search or filters to return to all rows.</p>
               </div>
             ) : (
               <div className="card overflow-hidden bg-white border border-slate-200 shadow-sm">
@@ -872,17 +1039,40 @@ export default function AppPage() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        {app.config.fields.map((f) => (
-                          <th key={f.name}>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-extrabold text-slate-650">{f.name}</span>
-                              <span className={`badge ${TYPE_COLORS[f.type] || "badge-purple"}`}>
-                                {f.type}
-                              </span>
-                            </div>
-                          </th>
-                        ))}
-                        <th>Created</th>
+                        {app.config.fields.map((f) => {
+                          const isActiveSort = sortState?.key === f.name;
+                          return (
+                            <th key={f.name}>
+                              <button
+                                type="button"
+                                onClick={() => toggleSort(f.name, f.type)}
+                                className="flex w-full items-center gap-1.5 border-none bg-transparent p-0 text-left cursor-pointer group"
+                                title={`Sort by ${f.name}`}
+                              >
+                                <span className="font-extrabold text-slate-650">{f.name}</span>
+                                <span className={`badge ${TYPE_COLORS[f.type] || "badge-purple"}`}>
+                                  {f.type}
+                                </span>
+                                <span className={`text-[10px] font-black transition ${isActiveSort ? "text-[#7c6ef5]" : "text-slate-300 group-hover:text-slate-500"}`}>
+                                  {isActiveSort ? (sortState.direction === "asc" ? "Asc" : "Desc") : "Sort"}
+                                </span>
+                              </button>
+                            </th>
+                          );
+                        })}
+                        <th>
+                          <button
+                            type="button"
+                            onClick={() => toggleSort("createdAt", "date")}
+                            className="flex w-full items-center gap-1.5 border-none bg-transparent p-0 text-left cursor-pointer group"
+                            title="Sort by created date"
+                          >
+                            <span>Created</span>
+                            <span className={`text-[10px] font-black transition ${sortState?.key === "createdAt" ? "text-[#7c6ef5]" : "text-slate-300 group-hover:text-slate-500"}`}>
+                              {sortState?.key === "createdAt" ? (sortState.direction === "asc" ? "Asc" : "Desc") : "Sort"}
+                            </span>
+                          </button>
+                        </th>
                         <th className="text-right">Actions</th>
                       </tr>
                     </thead>
@@ -987,6 +1177,70 @@ export default function AppPage() {
           />
         )}
       </main>
+
+      {showCmdPalette && (
+        <div className="cmd-palette-backdrop animate-fade-in" onClick={() => setShowCmdPalette(false)}>
+          <div className="cmd-palette-content" onClick={(event) => event.stopPropagation()}>
+            <input
+              type="text"
+              placeholder="Search runtimes by name..."
+              className="cmd-input font-semibold"
+              autoFocus
+              value={cmdSearch}
+              onChange={(event) => setCmdSearch(event.target.value)}
+            />
+            <div className="p-2 max-h-[320px] overflow-y-auto">
+              <div className="text-[10px] font-bold text-slate-400 uppercase px-3 py-1.5">Applications</div>
+              {filteredCmdApps.map((runtime) => (
+                <button
+                  key={runtime.id}
+                  onClick={() => {
+                    router.push(`/apps/${runtime.id}`);
+                    setShowCmdPalette(false);
+                  }}
+                  className="cmd-item rounded-lg"
+                >
+                  <div className="flex flex-col">
+                    <span className="font-extrabold text-sm text-slate-800">{runtime.name}</span>
+                    <span className="text-[10px] text-slate-500 font-mono mt-0.5">Entity: {runtime.config.entity}</span>
+                  </div>
+                  <span className="badge badge-purple text-[9px]">{runtime._count.records} records</span>
+                </button>
+              ))}
+              {filteredCmdApps.length === 0 && (
+                <div className="p-4 text-center text-xs text-slate-400 font-bold">
+                  No matching apps found.
+                </div>
+              )}
+              <div className="border-t border-slate-100 mt-2 pt-2">
+                <div className="text-[10px] font-bold text-slate-400 uppercase px-3 py-1.5">Quick Actions</div>
+                <button
+                  onClick={() => {
+                    router.push("/apps/new");
+                    setShowCmdPalette(false);
+                  }}
+                  className="cmd-item rounded-lg text-xs font-bold text-slate-700"
+                >
+                  Create new app workspace
+                </button>
+                <button
+                  onClick={() => {
+                    router.push("/dashboard");
+                    setShowCmdPalette(false);
+                  }}
+                  className="cmd-item rounded-lg text-xs font-bold text-slate-700"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+            </div>
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-semibold">
+              <span>Tip: Press ESC to close</span>
+              <span>AppForge Command Center</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── PWA "DEPLOY TO PHONE" INSTALL QR OVERLAY MODAL ────────────────────── */}
       {showPwaModal && (

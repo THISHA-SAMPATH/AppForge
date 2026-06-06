@@ -68,14 +68,25 @@ export async function PUT(request: NextRequest, { params }: Params) {
         null) as Prisma.InputJsonValue;
     }
 
-    const updated = await prisma.appRecord.update({
-      where: { id: recordId },
-      data: { data: sanitizedData as Prisma.InputJsonObject },
-    });
+    const [updated] = await prisma.$transaction([
+      prisma.appRecord.update({
+        where: { id: recordId },
+        data: { data: sanitizedData as Prisma.InputJsonObject },
+      }),
+      prisma.app.update({
+        where: { id: appId },
+        data: { updatedAt: new Date() },
+      }),
+    ]);
 
     return NextResponse.json<ApiResponse>({
       success: true,
-      data: { id: updated.id, ...(updated.data as Prisma.JsonObject) },
+      data: {
+        id: updated.id,
+        ...(updated.data as Prisma.JsonObject),
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+      },
     });
   } catch (error) {
     console.error("PUT record error:", error);
@@ -110,7 +121,25 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
       );
     }
 
-    await prisma.appRecord.delete({ where: { id: recordId } });
+    const record = await prisma.appRecord.findFirst({
+      where: { id: recordId, appId },
+      select: { id: true },
+    });
+
+    if (!record) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: "Record not found" },
+        { status: 404 },
+      );
+    }
+
+    await prisma.$transaction([
+      prisma.appRecord.delete({ where: { id: recordId } }),
+      prisma.app.update({
+        where: { id: appId },
+        data: { updatedAt: new Date() },
+      }),
+    ]);
 
     return NextResponse.json<ApiResponse>({
       success: true,

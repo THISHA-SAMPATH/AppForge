@@ -97,10 +97,15 @@ export async function POST(request: NextRequest, { params }: Params) {
         });
       }
 
-      // Use createMany for bulk database insertion
-      await prisma.appRecord.createMany({
-        data: recordsToCreate,
-      });
+      await prisma.$transaction([
+        prisma.appRecord.createMany({
+          data: recordsToCreate,
+        }),
+        prisma.app.update({
+          where: { id: appId },
+          data: { updatedAt: new Date() },
+        }),
+      ]);
 
       return NextResponse.json<ApiResponse>(
         {
@@ -130,9 +135,15 @@ export async function POST(request: NextRequest, { params }: Params) {
         null) as Prisma.InputJsonValue;
     }
 
-    const record = await prisma.appRecord.create({
-      data: { appId, entity, data: sanitizedData as Prisma.InputJsonObject },
-    });
+    const [record] = await prisma.$transaction([
+      prisma.appRecord.create({
+        data: { appId, entity, data: sanitizedData as Prisma.InputJsonObject },
+      }),
+      prisma.app.update({
+        where: { id: appId },
+        data: { updatedAt: new Date() },
+      }),
+    ]);
 
     return NextResponse.json<ApiResponse>(
       {
@@ -141,6 +152,7 @@ export async function POST(request: NextRequest, { params }: Params) {
           id: record.id,
           ...(record.data as Prisma.JsonObject),
           createdAt: record.createdAt,
+          updatedAt: record.updatedAt,
         },
       },
       { status: 201 },
