@@ -386,6 +386,7 @@ export default function AppPage() {
   // UI state
   const [showSwitcherDropdown, setShowSwitcherDropdown] = useState(false);
   const [showPwaModal, setShowPwaModal] = useState(false);
+  const [localIp, setLocalIp] = useState("");
   const switcherRef = useRef<HTMLDivElement>(null);
 
   // Version Comparison Modal state
@@ -484,6 +485,23 @@ export default function AppPage() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [loadApp, loadAllApps]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname;
+      const isLocal = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+      if (isLocal) {
+        fetch("/api/local-ip")
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.ip) {
+              setLocalIp(data.ip);
+            }
+          })
+          .catch((err) => console.error("Error fetching local IP:", err));
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!app) return;
@@ -794,7 +812,23 @@ export default function AppPage() {
     };
   }, [enumFieldFilters, records]);
 
-  const appUrl = typeof window !== "undefined" ? window.location.origin + "/apps/" + appId : "";
+  const appUrl = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    const origin = window.location.origin;
+    const path = `apps/${appId}`;
+    if (localIp) {
+      try {
+        const url = new URL(origin);
+        if (url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]") {
+          url.hostname = localIp;
+        }
+        return new URL(path, url.toString()).toString();
+      } catch (e) {
+        console.error("Error constructing app URL with local IP:", e);
+      }
+    }
+    return `${origin}/${path}`;
+  }, [appId, localIp]);
 
   if (loading)
     return (

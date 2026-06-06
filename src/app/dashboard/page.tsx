@@ -328,9 +328,7 @@ export default function DashboardPage() {
       <header className="forge-topnav border-none shadow-[0_8px_30px_rgba(0,0,0,0.015)] bg-white/45 z-40">
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="flex items-center gap-2 text-decoration-none">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#7c6ef5] to-[#9a8eff] flex items-center justify-center font-black text-white text-[11px] shadow-sm tracking-tighter">
-              AF
-            </div>
+            <img src="/logo.png" className="w-6 h-6 object-contain rounded-md" alt="AppForge" />
             <span className="font-extrabold tracking-tight text-sm text-slate-850">AppForge</span>
           </Link>
         </div>
@@ -395,93 +393,93 @@ export default function DashboardPage() {
         <div className="relative w-full max-w-[1360px] mx-auto flex flex-col items-center justify-center py-6 min-h-[480px]">
           
           <h1 className="font-serif text-[clamp(2.8rem,6.5vw,4.5rem)] font-normal italic text-slate-900 text-center tracking-tight leading-[1.15] mb-2.5 z-20">
-            What are we <span className="text-[#e26e38] font-serif font-normal italic">building</span> today?
+            What are we <span className="text-[#7c6ef5] font-serif font-normal italic">building</span> today?
           </h1>
-          <p className="text-xs md:text-sm font-medium text-slate-500 text-center max-w-md mx-auto mb-10 z-20">
+          <p className="text-xs md:text-sm font-semibold text-slate-400 text-center max-w-md mx-auto mb-10 z-20">
             Describe your idea in natural language and AppForge will build the full application for you.
           </p>
 
-          {/* ─ FLOATING CARDS & CONNECTIONS ──────────────────────────────────────── */}
+          {/* ─ FLOATING DECORATOR CARDS (Cleaned & Positioned Outwards) ─────────── */}
           {/* Database Card */}
-          <div className="absolute left-[2%] top-[8%] lg:left-[4%] lg:top-[12%] hidden md:flex flex-col w-[145px] p-3.5 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-1 z-15 text-[10px]">
+          <div className="absolute left-[3%] top-[4%] lg:left-[5%] lg:top-[8%] hidden xl:flex flex-col w-[150px] p-4 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-1 z-15 text-[10px] select-none">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-amber-500 text-xs">📁</span>
               <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wide">Database</span>
             </div>
             <div className="space-y-1.5 text-slate-400 font-bold pl-1 font-mono text-[9px] mt-1">
               <div className="flex items-center gap-1.5">
-                <span className="w-1 h-1 rounded-full bg-slate-350" />
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
                 <span>id: string</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-1 h-1 rounded-full bg-slate-350" />
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
                 <span>name: string</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-1 h-1 rounded-full bg-slate-350" />
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
                 <span>price: number</span>
               </div>
             </div>
           </div>
 
-          {/* UI Components Card */}
-          <div className="absolute right-[2%] top-[10%] lg:right-[4%] lg:top-[14%] hidden md:flex flex-col w-[145px] p-3.5 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-2 z-15 text-[10px]">
+          {/* UI Elements Card */}
+          <div className="absolute right-[3%] top-[6%] lg:right-[5%] lg:top-[10%] hidden xl:flex flex-col w-[150px] p-4 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-2 z-15 text-[10px] select-none">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[#7c6ef5] text-xs">㗊</span>
-              <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wide">UI Components</span>
+              <span className="text-indigo-500 text-xs">㗊</span>
+              <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wide">UI elements</span>
             </div>
             <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100/30 rounded-xl mt-1">
-              <div className="h-5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8px] text-slate-400">Box</div>
-              <div className="h-5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8px] text-slate-400">List</div>
-              <div className="h-5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8px] text-slate-400">Card</div>
-              <div className="h-5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8px] text-slate-400">Grid</div>
+              <div className="h-5.5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8.5px] text-slate-450 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">Box</div>
+              <div className="h-5.5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8.5px] text-slate-450 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">List</div>
+              <div className="h-5.5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8.5px] text-slate-450 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">Card</div>
+              <div className="h-5.5 rounded-lg bg-white border border-slate-100 flex items-center justify-center font-bold text-[8.5px] text-slate-450 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">Grid</div>
             </div>
           </div>
 
-          {/* API Card */}
-          <div className="absolute left-[3%] bottom-[12%] lg:left-[5%] lg:bottom-[16%] hidden md:flex flex-col w-[145px] p-3.5 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-3 z-15 text-[10px]">
+          {/* API Endpoints Card */}
+          <div className="absolute left-[4%] bottom-[8%] lg:left-[6%] lg:bottom-[12%] hidden xl:flex flex-col w-[150px] p-4 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-3 z-15 text-[10px] select-none">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-emerald-500 font-mono font-black text-xs">&lt;/&gt;</span>
-              <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wide">API</span>
+              <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wide">Endpoints</span>
             </div>
             <div className="space-y-1.5 font-mono text-[8.5px] font-bold text-slate-500 mt-1.5">
-              <div className="bg-white/60 px-2 py-1.5 rounded-xl border border-slate-200/40 truncate">GET /api/apps</div>
-              <div className="bg-white/60 px-2 py-1.5 rounded-xl border border-slate-200/40 truncate">POST /api/records</div>
+              <div className="bg-white/60 px-2 py-1.5 rounded-xl border border-slate-200/40 truncate shadow-[0_1px_2px_rgba(0,0,0,0.01)]">GET /api/apps</div>
+              <div className="bg-white/60 px-2 py-1.5 rounded-xl border border-slate-200/40 truncate shadow-[0_1px_2px_rgba(0,0,0,0.01)]">POST /api/records</div>
             </div>
           </div>
 
-          {/* Dashboard Card */}
-          <div className="absolute right-[3%] bottom-[10%] lg:right-[5%] lg:bottom-[14%] hidden md:flex flex-col w-[145px] p-3.5 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-4 z-15 text-[10px]">
+          {/* Analytics Card */}
+          <div className="absolute right-[4%] bottom-[6%] lg:right-[6%] lg:bottom-[10%] hidden xl:flex flex-col w-[150px] p-4 bg-white/50 border border-white/70 rounded-2xl glass-floating-card float-anim-4 z-15 text-[10px] select-none">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[#e26e38] text-xs">📊</span>
-              <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wide">Dashboard</span>
+              <span className="text-indigo-500 text-xs">📊</span>
+              <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wide">Analytics</span>
             </div>
-            <div className="flex items-end justify-center gap-1.5 h-10 bg-slate-100/30 rounded-xl p-2 mt-1.5">
-              <div className="w-2 h-4 bg-[#f27233]/70 rounded-sm" />
-              <div className="w-2 h-6 bg-[#f27233] rounded-sm" />
-              <div className="w-2 h-8 bg-[#e26e38] rounded-sm" />
-              <div className="w-2 h-5 bg-[#7c6ef5]/80 rounded-sm" />
-              <div className="w-2 h-7 bg-[#7c6ef5] rounded-sm" />
+            <div className="flex items-end justify-center gap-1.5 h-11 bg-slate-100/30 rounded-xl p-2 mt-1.5">
+              <div className="w-2.5 h-4 bg-indigo-400/70 rounded-sm" />
+              <div className="w-2.5 h-6 bg-indigo-500 rounded-sm" />
+              <div className="w-2.5 h-8 bg-indigo-600 rounded-sm" />
+              <div className="w-2.5 h-5 bg-purple-400/80 rounded-sm" />
+              <div className="w-2.5 h-7 bg-purple-500 rounded-sm" />
             </div>
           </div>
 
-          {/* Connection Lines SVGs */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none hidden md:block z-0" viewBox="0 0 1360 480" preserveAspectRatio="none">
+          {/* Connection Lines SVGs (Dotted & Translucent) */}
+          <svg className="absolute inset-0 w-full h-full pointer-events-none hidden xl:block z-0" viewBox="0 0 1360 480" preserveAspectRatio="none">
             {/* Database to Prompt Box */}
-            <path d="M 190 100 C 280 100, 270 220, 365 220" className="path-connection" fill="none" strokeWidth="1.2" />
-            {/* UI Components to Prompt Box */}
-            <path d="M 1170 110 C 1080 110, 1090 220, 995 220" className="path-connection-alt" fill="none" strokeWidth="1.2" />
-            {/* API to Prompt Box */}
-            <path d="M 200 380 C 290 380, 280 280, 365 280" className="path-connection-alt" fill="none" strokeWidth="1.2" />
-            {/* Dashboard to Prompt Box */}
-            <path d="M 1160 370 C 1070 370, 1080 280, 995 280" className="path-connection" fill="none" strokeWidth="1.2" />
+            <path d="M 170 95 C 270 95, 260 215, 370 215" className="path-connection" fill="none" strokeWidth="1.2" />
+            {/* UI elements to Prompt Box */}
+            <path d="M 1190 105 C 1090 105, 1100 215, 990 215" className="path-connection-alt" fill="none" strokeWidth="1.2" />
+            {/* Endpoints to Prompt Box */}
+            <path d="M 180 365 C 280 365, 270 265, 370 265" className="path-connection-alt" fill="none" strokeWidth="1.2" />
+            {/* Analytics to Prompt Box */}
+            <path d="M 1180 355 C 1080 355, 1090 265, 990 265" className="path-connection" fill="none" strokeWidth="1.2" />
           </svg>
 
           {/* Central Glassmorphic input box */}
-          <div className="relative z-20 w-full max-w-[620px] bg-white rounded-3xl border border-[#e2e8f0]/80 shadow-[0_20px_50px_rgba(226,110,56,0.03),_0_1px_2px_rgba(0,0,0,0.015)] p-5.5 flex flex-col gap-3">
+          <div className="relative z-20 w-full max-w-[660px] bg-white/85 backdrop-blur-md rounded-3xl border border-slate-200/60 shadow-[0_30px_60px_rgba(124,110,245,0.05),_0_1px_3px_rgba(0,0,0,0.02)] p-6 flex flex-col gap-4 transition-all duration-300 focus-within:shadow-[0_32px_64px_rgba(124,110,245,0.12),_0_0_0_4px_rgba(124,110,245,0.08)] focus-within:border-indigo-400/60">
             <textarea
               rows={3}
-              className="w-full bg-transparent border-none outline-none resize-none text-[14px] leading-relaxed text-slate-800 placeholder-slate-400 font-sans"
+              className="w-full bg-transparent border-none outline-none resize-none text-sm leading-relaxed text-slate-800 placeholder-slate-400 font-sans font-medium"
               placeholder="e.g., I need an inventory system for my bakery with item name, price (number), category (enum), and current stock levels..."
               value={assistantPrompt}
               onChange={(e) => setAssistantPrompt(e.target.value)}
@@ -492,7 +490,7 @@ export default function DashboardPage() {
                 }
               }}
             />
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3.5">
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 {inferredConfig ? (
                   <>
@@ -510,21 +508,28 @@ export default function DashboardPage() {
                     )}
                   </>
                 ) : (
-                  <span className="text-[10px] font-semibold text-slate-400/90">Type a workflow and AppForge will infer entity + field types live.</span>
+                  <span className="text-[10.5px] font-semibold text-slate-400/80">Type a workflow and AppForge will infer entity + field types live.</span>
                 )}
               </div>
               <span className={`text-[10px] font-bold ${promptChars > promptLimit ? "text-red-500" : "text-slate-400"}`}>
                 {promptChars}/{promptLimit}
               </span>
             </div>
-            <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-              <span className="text-[10.5px] text-slate-400 font-semibold flex items-center gap-1">
-                <span>{forging ? "Forging your app..." : "Press Enter to Forge"}</span>
+            <div className="flex items-center justify-between border-t border-slate-100 pt-3.5">
+              <span className="text-[10.5px] text-slate-400 font-semibold flex items-center gap-1.5">
+                {forging ? (
+                  <>
+                    <span className="inline-flex w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+                    <span>Forging app runtime...</span>
+                  </>
+                ) : (
+                  <span>Press Enter to Forge</span>
+                )}
               </span>
               <button
                 onClick={() => handleForgeAssistant()}
                 disabled={forging || !assistantPrompt.trim()}
-                className="dashboard-gradient-btn px-6 py-2.5 rounded-xl text-xs font-black cursor-pointer border-none"
+                className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-650 hover:from-indigo-600 hover:to-purple-750 shadow-md shadow-indigo-200/30 hover:shadow-lg hover:shadow-indigo-300/50 active:scale-95 transition-all cursor-pointer border-none disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none"
               >
                 {forging ? (
                   <span className="inline-flex items-center gap-2">
@@ -545,8 +550,8 @@ export default function DashboardPage() {
         )}
 
         {/* Starter shortcuts */}
-        <div className="relative z-20 flex flex-wrap items-center justify-center gap-3.5 mt-2">
-          <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mr-1">Starters:</span>
+        <div className="relative z-20 flex flex-wrap items-center justify-center gap-3 mt-4">
+          <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest mr-1.5">Starters:</span>
           {STARTERS.map((s) => (
             <button
               key={s.label}
@@ -554,7 +559,7 @@ export default function DashboardPage() {
                 notify("success", `Loaded ${s.label} starter.`);
                 router.push(`/apps/new?starter=${encodeURIComponent(s.label)}`);
               }}
-              className="px-4 py-1.5 rounded-full text-xs font-bold text-slate-700 bg-white/50 hover:bg-white hover:text-[#e26e38] transition border border-[#e2e8f0]/70 hover:border-[#f27233]/30 cursor-pointer flex items-center gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.015)]"
+              className="px-4 py-2 rounded-xl text-xs font-bold text-slate-650 bg-white/60 hover:bg-white hover:text-indigo-600 hover:border-indigo-300 border border-slate-200/50 hover:translate-y-[-1px] transition-all cursor-pointer flex items-center gap-2 shadow-[0_2px_4px_rgba(0,0,0,0.01)]"
             >
               <span className="starred-bullet" style={{ background: s.color }} />
               {s.label}
@@ -586,14 +591,14 @@ export default function DashboardPage() {
                 const theme = getAppTheme(app.name, app.config.entity);
                 const isError = app.name.toLowerCase().includes("error") || app.name.toLowerCase().includes("fail") || app.description?.toLowerCase().includes("error");
                 return (
-                  <div key={app.id} className="runtime-grid-card p-4.5 flex flex-col justify-between gap-3 group">
+                  <div key={app.id} className="p-5 flex flex-col justify-between gap-4 bg-white/70 backdrop-blur-md border border-slate-200/50 rounded-2xl shadow-[0_4px_20px_rgba(15,23,42,0.015)] hover:shadow-[0_16px_36px_rgba(124,110,245,0.08)] hover:border-indigo-200/60 hover:translate-y-[-3px] transition-all duration-300 group">
                     <Link href={`/apps/${app.id}`} className="flex items-start justify-between gap-3 text-decoration-none">
                       <div className="flex items-center gap-4 min-w-0">
                         <div className={`w-11 h-11 rounded-xl ${theme.iconBg} flex items-center justify-center shrink-0`}>
                           {theme.icon}
                         </div>
                         <div className="min-w-0">
-                          <h4 className="font-extrabold text-sm text-slate-800 m-0 line-clamp-1 leading-tight group-hover:text-[#e26e38] transition-colors">
+                          <h4 className="font-extrabold text-sm text-slate-850 m-0 line-clamp-1 leading-tight group-hover:text-indigo-600 transition-colors">
                             {app.name}
                           </h4>
                           <p className="text-[10px] font-semibold text-slate-400 mt-1 mb-0.5">
@@ -612,13 +617,13 @@ export default function DashboardPage() {
                           )}
                         </div>
                       </div>
-                      <span className="text-slate-350 group-hover:text-slate-700 group-hover:translate-x-0.5 transition-all text-lg pl-2 font-bold select-none">&rarr;</span>
+                      <span className="text-slate-350 group-hover:text-indigo-650 group-hover:translate-x-0.5 transition-all text-lg pl-2 font-bold select-none">&rarr;</span>
                     </Link>
                     <button
                       type="button"
                       onClick={() => handleCloneApp(app)}
                       disabled={cloningAppId === app.id}
-                      className="w-full rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-600 transition hover:border-[#7c6ef5]/30 hover:text-[#7c6ef5] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-xl border border-slate-200/80 bg-white/80 hover:bg-white hover:border-indigo-200 hover:text-indigo-600 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 transition-all active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:scale-100"
                     >
                       {cloningAppId === app.id ? "Cloning..." : "Clone this runtime"}
                     </button>
@@ -641,14 +646,14 @@ export default function DashboardPage() {
                       notify("info", `Opening starter app workspace for ${mock.name}...`);
                       router.push(`/apps/new?starter=${encodeURIComponent(mock.name)}`);
                     }}
-                    className="runtime-grid-card p-4.5 flex items-center justify-between text-decoration-none border-none text-left w-full cursor-pointer bg-white group"
+                    className="p-5 flex items-center justify-between text-decoration-none border border-slate-200/50 bg-white/70 backdrop-blur-md rounded-2xl w-full cursor-pointer shadow-[0_4px_20px_rgba(15,23,42,0.015)] hover:shadow-[0_16px_36px_rgba(124,110,245,0.08)] hover:border-indigo-200/60 hover:translate-y-[-3px] transition-all duration-300 text-left group"
                   >
                     <div className="flex items-center gap-4 min-w-0">
                       <div className={`w-11 h-11 rounded-xl ${theme.iconBg} flex items-center justify-center shrink-0`}>
                         {theme.icon}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="font-extrabold text-sm text-slate-800 m-0 line-clamp-1 leading-tight group-hover:text-[#e26e38] transition-colors">
+                        <h4 className="font-extrabold text-sm text-slate-850 m-0 line-clamp-1 leading-tight group-hover:text-indigo-600 transition-colors">
                           {mock.name}
                         </h4>
                         <p className="text-[10px] font-semibold text-slate-400 mt-1 mb-0.5">
@@ -667,18 +672,18 @@ export default function DashboardPage() {
                         )}
                       </div>
                     </div>
-                    <span className="text-slate-350 group-hover:text-slate-700 group-hover:translate-x-0.5 transition-all text-lg pl-2 font-bold select-none">&rarr;</span>
+                    <span className="text-slate-350 group-hover:text-indigo-650 group-hover:translate-x-0.5 transition-all text-lg pl-2 font-bold select-none">&rarr;</span>
                   </button>
                 );
               }) }
 
               {/* Start from scratch dashed card */}
-              <Link href="/apps/new" className="runtime-grid-card p-4.5 flex items-center gap-4 text-decoration-none border border-dashed border-slate-300 bg-[#fcfcfa]/60 hover:bg-white group">
-                <div className="w-11 h-11 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-400 group-hover:text-[#e26e38] group-hover:border-[#e26e38]/30 transition shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+              <Link href="/apps/new" className="p-5 flex items-center gap-4 text-decoration-none border border-dashed border-slate-300/80 bg-[#fcfcfa]/60 backdrop-blur-md rounded-2xl shadow-[0_4px_20px_rgba(15,23,42,0.015)] hover:shadow-[0_16px_36px_rgba(124,110,245,0.06)] hover:border-indigo-400 hover:bg-white/85 hover:translate-y-[-3px] transition-all duration-300 group">
+                <div className="w-11 h-11 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-400 group-hover:text-indigo-600 group-hover:border-indigo-200 transition shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                   <span className="text-lg font-black leading-none">+</span>
                 </div>
                 <div>
-                  <h4 className="font-extrabold text-sm text-slate-850 m-0 leading-tight">New App</h4>
+                  <h4 className="font-extrabold text-sm text-slate-850 group-hover:text-indigo-600 transition-colors m-0 leading-tight">New App</h4>
                   <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Start from scratch</p>
                 </div>
               </Link>

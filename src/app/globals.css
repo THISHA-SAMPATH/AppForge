@@ -161,7 +161,7 @@ button, input, select, textarea {
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 40px);
-  max-width: 900px;
+  max-width: 1200px;
   height: 54px;
   background: rgba(255, 255, 255, 0.45);
   backdrop-filter: blur(20px);
